@@ -128,7 +128,7 @@ export const SqlTypes = {
   int: sql.Int,
   bigint: sql.BigInt,
   bit: sql.Bit,
-  date: sql.Date,
-  datetime2: sql.DateTime2,
+  date: sql.Date,  // sql.Date is a factory function, called as sql.Date() in bulkInsert
+  datetime2: sql.DateTime2,  // sql.DateTime2 is a factory function
   char: (length: number): sql.ISqlType => sql.Char(length),
 };

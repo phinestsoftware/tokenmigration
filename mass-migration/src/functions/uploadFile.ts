@@ -142,8 +142,10 @@ async function loadMonerisTokensToStaging(
     return toMonerisTokenStaging(record, fileId);
   });
 
+  // Column list must match table definition order (skip IDENTITY column ID)
   const columns = [
     { name: 'FILE_ID', type: SqlTypes.varchar(50) },
+    { name: 'BATCH_ID', type: SqlTypes.varchar(50) },
     { name: 'MONERIS_TOKEN', type: SqlTypes.varchar(16) },
     { name: 'EXP_DATE', type: SqlTypes.varchar(4) },
     { name: 'ENTITY_ID', type: SqlTypes.varchar(36) },
@@ -155,11 +157,16 @@ async function loadMonerisTokensToStaging(
     { name: 'BUSINESS_UNIT', type: SqlTypes.varchar(20) },
     { name: 'VALIDATION_STATUS', type: SqlTypes.varchar(20) },
     { name: 'MIGRATION_STATUS', type: SqlTypes.varchar(20) },
+    { name: 'ERROR_CODE', type: SqlTypes.varchar(20) },
+    { name: 'PMR', type: SqlTypes.varchar(16) },
+    { name: 'CREATED_AT', type: SqlTypes.datetime2 },
+    { name: 'UPDATED_AT', type: SqlTypes.datetime2 },
     { name: 'UPDATED_BY', type: SqlTypes.varchar(50) },
   ];
 
   const rows = tokens.map((t) => ({
     FILE_ID: t.fileId,
+    BATCH_ID: t.batchId,
     MONERIS_TOKEN: t.monerisToken,
     EXP_DATE: t.expDate,
     ENTITY_ID: t.entityId,
@@ -171,10 +178,14 @@ async function loadMonerisTokensToStaging(
     BUSINESS_UNIT: t.businessUnit,
     VALIDATION_STATUS: t.validationStatus,
     MIGRATION_STATUS: t.migrationStatus,
+    ERROR_CODE: t.errorCode,
+    PMR: t.pmr,
+    CREATED_AT: new Date(),
+    UPDATED_AT: null,
     UPDATED_BY: t.updatedBy,
   }));
 
-  const insertedCount = await bulkInsert('MONERIS_TOKENS_STAGING', columns, rows);
+  const insertedCount = await bulkInsert('[dbo].[MONERIS_TOKENS_STAGING]', columns, rows);
   logger.info('Moneris tokens loaded to staging', { insertedCount });
 }
 
