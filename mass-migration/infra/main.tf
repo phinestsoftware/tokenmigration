@@ -93,6 +93,10 @@ module "function_app" {
   storage_account_access_key   = module.storage.storage_account_primary_access_key
   storage_connection_string    = module.storage.storage_connection_string
   sql_connection_string        = module.sql_database.connection_string
+  sql_server_fqdn              = module.sql_database.server_fqdn
+  sql_database_name            = module.sql_database.database_name
+  sql_admin_username           = var.sql_admin_username
+  sql_admin_password           = var.sql_admin_password
   application_insights_key     = module.application_insights.instrumentation_key
   application_insights_conn_str = module.application_insights.connection_string
   tags                         = local.common_tags

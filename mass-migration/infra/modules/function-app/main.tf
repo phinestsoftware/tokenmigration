@@ -37,6 +37,24 @@ variable "sql_connection_string" {
   sensitive = true
 }
 
+variable "sql_server_fqdn" {
+  type = string
+}
+
+variable "sql_database_name" {
+  type = string
+}
+
+variable "sql_admin_username" {
+  type      = string
+  sensitive = true
+}
+
+variable "sql_admin_password" {
+  type      = string
+  sensitive = true
+}
+
 variable "application_insights_key" {
   type      = string
   sensitive = true
@@ -109,7 +127,15 @@ resource "azurerm_linux_function_app" "main" {
     "BATCH_WORKER_QUEUE"             = "batch-worker-queue"
     "BILLING_FILE_QUEUE"             = "billing-file-queue"
 
-    # Database (reference from Key Vault in production)
+    # Database - Individual settings required by the app
+    "SQL_SERVER"                     = var.sql_server_fqdn
+    "SQL_DATABASE"                   = var.sql_database_name
+    "SQL_USER"                       = var.sql_admin_username
+    "SQL_PASSWORD"                   = var.sql_admin_password
+    "SQL_ENCRYPT"                    = "true"
+    "SQL_TRUST_SERVER_CERTIFICATE"   = "false"
+
+    # Database - Connection string (for reference)
     "SQL_CONNECTION_STRING"          = var.sql_connection_string
 
     # Migration Settings
