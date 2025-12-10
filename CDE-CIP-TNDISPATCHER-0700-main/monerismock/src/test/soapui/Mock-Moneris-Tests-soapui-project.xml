@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<con:soapui-project id="cde9acdc-27db-4566-b175-feb490accb89" activeEnvironment="Default" name="Mock Moneris Tests" resourceRoot="" soapui-version="5.3.0" abortOnError="false" runType="SEQUENTIAL" xmlns:con="http://eviware.com/soapui/config"><con:settings/><con:interface xsi:type="con:RestService" id="132329d0-5eb8-43e1-9204-9935622808a5" wadlVersion="http://wadl.dev.java.net/2009/02" name="http://localhost:7051" type="rest" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><con:settings/><con:definitionCache type="TEXT" rootPart=""/><con:endpoints><con:endpoint>http://localhost:7051</con:endpoint></con:endpoints><con:resource name="Moneris" path="" id="3f3db505-5f03-44ce-83bf-5e9f9f1f87da"><con:settings/><con:parameters/><con:method name="OK" id="da15cb7c-0840-4ca4-8ba1-48fa4ca247e8" method="POST"><con:settings/><con:parameters/><con:representation type="REQUEST"><con:mediaType>application/json</con:mediaType><con:params/><con:element>request</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/plain;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="FAULT"><con:mediaType>application/json;charset=UTF-8</con:mediaType><con:status>500 404 405</con:status><con:params/><con:element xmlns:mon="http://localhost/moneris">mon:Fault</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/html</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>application/xml;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:request name="tokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_add_cc>
+<pan>5404000000000001</pan>
+<card_type>M</card_type>
+</res_add_cc>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="detokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_full>
+<data_key>9668475942450001</data_key>
+</res_lookup_full>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="firstsix" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450001</data_key>
+<lookup_format>3</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="verify" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450001</data_key>
+<lookup_format>4</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method><con:method name="BADTOKEN" id="da15cb7c-0840-4ca4-8ba1-48fa4ca247e8" method="POST"><con:settings/><con:parameters/><con:representation type="REQUEST"><con:mediaType>application/json</con:mediaType><con:params/><con:element>request</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/plain;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="FAULT"><con:mediaType>application/json;charset=UTF-8</con:mediaType><con:status>500</con:status><con:params/><con:element xmlns:mon="http://localhost/moneris">mon:Fault</con:element></con:representation><con:request name="detokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_full>
+<data_key>9668475942450002</data_key>
+</res_lookup_full>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="firstsix" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450002</data_key>
+<lookup_format>3</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="verify" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450002</data_key>
+<lookup_format>4</lookup_format>
+</res_lookup_masked>
+</request>
+
+]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method><con:method name="INVALIDNUM" id="da15cb7c-0840-4ca4-8ba1-48fa4ca247e8" method="POST"><con:settings/><con:parameters/><con:representation type="REQUEST"><con:mediaType>application/json</con:mediaType><con:params/><con:element>request</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/plain;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="FAULT"><con:mediaType>application/json;charset=UTF-8</con:mediaType><con:status>500</con:status><con:params/><con:element xmlns:mon="http://localhost/moneris">mon:Fault</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:request name="tokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_add_cc>
+<pan>5404000555000001</pan>
+<card_type>M</card_type>
+</res_add_cc>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method><con:method name="BADTYPE" id="da15cb7c-0840-4ca4-8ba1-48fa4ca247e8" method="POST"><con:settings/><con:parameters/><con:representation type="REQUEST"><con:mediaType>application/json</con:mediaType><con:params/><con:element>request</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/plain;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="FAULT"><con:mediaType>application/json;charset=UTF-8</con:mediaType><con:status>500</con:status><con:params/><con:element xmlns:mon="http://localhost/moneris">mon:Fault</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:request name="tokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_add_cc>
+<pan>3569990000000009</pan>
+<card_type>M</card_type>
+</res_add_cc>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method><con:method name="TYPEMISMATCH" id="da15cb7c-0840-4ca4-8ba1-48fa4ca247e8" method="POST"><con:settings/><con:parameters/><con:representation type="REQUEST"><con:mediaType>application/json</con:mediaType><con:params/><con:element>request</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/plain;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="FAULT"><con:mediaType>application/json;charset=UTF-8</con:mediaType><con:status>500</con:status><con:params/><con:element xmlns:mon="http://localhost/moneris">mon:Fault</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:request name="tokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_add_cc>
+<pan>4917300000000008</pan>
+<card_type>V</card_type>
+</res_add_cc>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method><con:method name="BADBIN" id="da15cb7c-0840-4ca4-8ba1-48fa4ca247e8" method="POST"><con:settings/><con:parameters/><con:representation type="REQUEST"><con:mediaType>application/json</con:mediaType><con:params/><con:element>request</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/plain;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="FAULT"><con:mediaType>application/json;charset=UTF-8</con:mediaType><con:status>500</con:status><con:params/><con:element xmlns:mon="http://localhost/moneris">mon:Fault</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:request name="tokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_add_cc>
+<pan>5404000000000043</pan>
+<card_type>M</card_type>
+</res_add_cc>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method><con:method name="UNKNOWNERROR" id="da15cb7c-0840-4ca4-8ba1-48fa4ca247e8" method="POST"><con:settings/><con:parameters/><con:representation type="REQUEST"><con:mediaType>application/json</con:mediaType><con:params/><con:element>request</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/plain;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="FAULT"><con:mediaType>application/json;charset=UTF-8</con:mediaType><con:status>500</con:status><con:params/><con:element xmlns:mon="http://localhost/moneris">mon:Fault</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>application/xml;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:request name="tokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_add_cc>
+<pan>5404000000000084</pan>
+<card_type>M</card_type>
+</res_add_cc>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="detokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_full>
+<data_key>9668475942450003</data_key>
+</res_lookup_full>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="firstsix" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450003</data_key>
+<lookup_format>3</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="verify" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450003</data_key>
+<lookup_format>4</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="xml error" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450023</data_key>
+<lookup_format>4</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method><con:method name="NOACCESS" id="da15cb7c-0840-4ca4-8ba1-48fa4ca247e8" method="POST"><con:settings/><con:parameters/><con:representation type="REQUEST"><con:mediaType>application/json</con:mediaType><con:params/><con:element>request</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/plain;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="FAULT"><con:mediaType>application/json;charset=UTF-8</con:mediaType><con:status>500</con:status><con:params/><con:element xmlns:mon="http://localhost/moneris">mon:Fault</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>application/xml;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:request name="tokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_add_cc>
+<pan>5404000000000068</pan>
+<card_type>M</card_type>
+</res_add_cc>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="detokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_full>
+<data_key>9668475942450004</data_key>
+</res_lookup_full>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="firstsix" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450004</data_key>
+<lookup_format>3</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="verify" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450004</data_key>
+<lookup_format>4</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method><con:method name="null" id="da15cb7c-0840-4ca4-8ba1-48fa4ca247e8" method="POST"><con:settings/><con:parameters/><con:representation type="REQUEST"><con:mediaType>application/json</con:mediaType><con:params/><con:element>request</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/plain;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="FAULT"><con:mediaType>application/json;charset=UTF-8</con:mediaType><con:status>500</con:status><con:params/><con:element xmlns:mon="http://localhost/moneris">mon:Fault</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:request name="tokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>http://localhost:7051</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_add_cc>
+<pan>4000000000000002</pan>
+<card_type>V</card_type>
+</res_add_cc>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="detokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>http://localhost:7051</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_full>
+<data_key>9668475942450005</data_key>
+</res_lookup_full>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="firstsix" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>http://localhost:7051</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450005</data_key>
+<lookup_format>3</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="verify" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>http://localhost:7051</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942450005</data_key>
+<lookup_format>4</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method><con:method name="NOSERVICE" id="da15cb7c-0840-4ca4-8ba1-48fa4ca247e8" method="POST"><con:settings/><con:parameters/><con:representation type="REQUEST"><con:mediaType>application/json</con:mediaType><con:params/><con:element>request</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>text/plain;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:representation type="FAULT"><con:mediaType>application/json;charset=UTF-8</con:mediaType><con:status>500</con:status><con:params/><con:element xmlns:mon="http://localhost/moneris">mon:Fault</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType xsi:nil="true"/><con:status>0</con:status><con:params/><con:element>data</con:element></con:representation><con:representation type="RESPONSE"><con:mediaType>application/xml;charset=UTF-8</con:mediaType><con:status>200</con:status><con:params/><con:element>response</con:element></con:representation><con:request name="tokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_add_cc>
+<pan>5404000000001168</pan>
+<card_type>M</card_type>
+</res_add_cc>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="detokenise" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_full>
+<data_key>9668475942451104</data_key>
+</res_lookup_full>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="firstsix" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942451104</data_key>
+<lookup_format>3</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request><con:request name="verify" id="df2fd97a-0bd5-420a-8f09-c43342695632" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>${#Project#ServiceEndpoint}</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>${#Project#StoreId}</store_id>
+<api_token>${#Project#ApiToken}</api_token>
+<res_lookup_masked>
+<data_key>9668475942451104</data_key>
+<lookup_format>4</lookup_format>
+</res_lookup_masked>
+</request>]]></con:request><con:originalUri>http://localhost/moneris</con:originalUri><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method></con:resource></con:interface><con:testSuite id="391f2bbe-b30d-4226-967d-745b569cd991" name="TestSuite 1"><con:settings/><con:runType>SEQUENTIAL</con:runType><con:testCase id="d4beb0fa-323b-4e88-9ac4-01023849f977" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="TestCase 1" searchProperties="true"><con:settings/><con:testStep type="httprequest" name="HTTP Request" id="3887693c-25b7-4d5b-bef6-710aa7d4f34f"><con:settings/><con:config method="POST" xsi:type="con:HttpRequest" id="9af2693c-aadb-4644-94e9-33cb209a5c57" name="HTTP Request" postQueryString="false" mediaType="application/xml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>https://vaast.moneris.com/vaas/VaasServlet</con:endpoint><con:request><![CDATA[<request>
+  <store_id>vaas000238</store_id>
+  <api_token>mKtMufkRYwBRCrouj5Oo</api_token>
+  <res_batch>
+    <res_lookup_full>
+      <data_key>9400474252021111</data_key>
+    </res_lookup_full>
+  </res_batch>
+</request>]]></con:request><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:config></con:testStep><con:properties/></con:testCase><con:testCase id="7fd8bf3f-56b7-425b-ba71-4ce36e74097f" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="Copy of TestCase 1" searchProperties="true"><con:settings/><con:testStep type="httprequest" name="HTTP Request" id="453ff05d-670e-4ab7-9390-00e2885847db"><con:settings/><con:config method="POST" xsi:type="con:HttpRequest" id="9af2693c-aadb-4644-94e9-33cb209a5c57" name="HTTP Request" postQueryString="false" mediaType="application/xml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>https://vaast.moneris.com/vaas/VaasServlet</con:endpoint><con:request><![CDATA[<request>
+  <store_id>vaas000238</store_id>
+  <api_token>mKtMufkRYwBRCrouj5Oo</api_token>
+  <res_batch>
+    <res_lookup_full>
+      <data_key>9297986508269556</data_key>
+      <card_type>B</card_type>
+    </res_lookup_full>
+  </res_batch>
+</request>]]></con:request><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:config></con:testStep><con:testStep type="httprequest" name="addcc" id="da186df1-d7b3-40db-84eb-809a05bf35f6"><con:settings/><con:config method="POST" xsi:type="con:HttpRequest" id="9af2693c-aadb-4644-94e9-33cb209a5c57" name="addcc" postQueryString="false" mediaType="application/xml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>https://vaast.moneris.com/vaas/VaasServlet</con:endpoint><con:request><![CDATA[<request>
+  <store_id>vaas000238</store_id>
+  <api_token>mKtMufkRYwBRCrouj5Oo</api_token>
+  <res_batch>
+    <res_add_cc><A
+      <pan>445454</pan>
+      <card_type>M</card_type>
+    </res_add_cc>
+  </res_batch>
+</request>
+
+]]></con:request><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:config></con:testStep><con:testStep type="httprequest" name="addcc mock" id="237d162a-b74e-443b-8705-7b32666ea0f9"><con:settings/><con:config method="POST" xsi:type="con:HttpRequest" id="9af2693c-aadb-4644-94e9-33cb209a5c57" name="addcc mock" postQueryString="false" mediaType="application/xml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>https://u14cip4:7051/moneris</con:endpoint><con:request><![CDATA[<request>
+  <store_id>vaas000238</store_id>
+  <api_token>mKtMufkRYwBRCrouj5Oo</api_token>
+  <res_batch>
+    <res_add_cc>
+      <pan>5404000555000001</pan>
+      <card_type>V</card_type>
+    </res_add_cc>
+    <res_add_cc>
+      <pan>5404000000000284</pan>
+      <card_type>M</card_type>
+    </res_add_cc>
+  </res_batch>
+</request>
+
+]]></con:request><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:config></con:testStep><con:testStep type="httprequest" name="lookup full mock" id="8bb8a839-1453-4ba4-a87b-f8a68e1ca851"><con:settings/><con:config method="POST" xsi:type="con:HttpRequest" id="9af2693c-aadb-4644-94e9-33cb209a5c57" name="lookup full mock" postQueryString="false" mediaType="application/xml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>https://u14cip4:7051/moneris</con:endpoint><con:request><![CDATA[<request>
+  <store_id>vaas000238</store_id>
+  <api_token>mKtMufkRYwBRCrouj5Oo</api_token>
+  <res_batch>
+    <res_lookup_full>
+      <data_key>9668475942450004</data_key>
+    </res_lookup_full>
+  </res_batch>
+</request>]]></con:request><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:config></con:testStep><con:properties/></con:testCase><con:properties/></con:testSuite><con:properties><con:property><con:name>ServiceEndpoint</con:name><con:value>https://u14cip4:7051/moneris</con:value></con:property><con:property><con:name>StoreId</con:name><con:value>vaas000239</con:value></con:property><con:property><con:name>ApiToken</con:name><con:value>tC730QxMzU068qs6AK4u</con:value></con:property></con:properties><con:wssContainer/><con:oAuth2ProfileContainer/><con:oAuth1ProfileContainer/></con:soapui-project>

@@ -1,0 +1,24 @@
+<env:Envelope xmlns:env='http://schemas.xmlsoap.org/soap/envelope/'
+              env:encodingStyle='http://schema.xmlsoap.org/soap/encoding/'>
+    <env:Header>
+    </env:Header>
+    <env:Body>
+        <urn:responseMessages xmlns:urn='urn:schemas-cybersource-com:transaction-data-2.3'>
+            <responseMessage>
+                <srcSystem>
+                    <name>true</name>
+                    <sysIndicator>false</sysIndicator>
+                </srcSystem>
+                <reasonCode>100</reasonCode>
+                <vault>
+                    <token>1234000012340000</token>
+                </vault>
+                <rm>
+                    <rflag>rflag</rflag>
+                    <rmsg>rmsg</rmsg>
+                </rm>
+                <ccTokenizeService run='true'/>
+            </responseMessage>
+        </urn:responseMessages>
+    </env:Body>
+</env:Envelope>

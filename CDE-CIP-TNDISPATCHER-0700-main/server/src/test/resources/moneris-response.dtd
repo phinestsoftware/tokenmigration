@@ -1,0 +1,11 @@
+<!-- The Rogers Vault Response DTD -->
+        <!-- Main Elements -->
+        <!ELEMENT response (receipt+)>
+        <!ELEMENT receipt (DataKey, ResponseCode, Message, CardType, Pan?, MaskedPan?, ResponseFlag?)>
+        <!ELEMENT DataKey (#PCDATA)>
+        <!ELEMENT ResponseCode (#PCDATA)>
+        <!ELEMENT Message (#PCDATA)>
+        <!ELEMENT CardType (#PCDATA)>
+        <!ELEMENT Pan (#PCDATA)>
+        <!ELEMENT MaskedPan (#PCDATA)>
+        <!ELEMENT ResponseFlag (#PCDATA)>

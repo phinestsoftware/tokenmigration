@@ -1,0 +1,88 @@
+# Ant ##
+# Build your Java projects and run tests with Apache Ant.
+# Add steps that save build artifacts and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/java
+
+trigger: 
+  - main
+  - "CDE*"  
+
+pool:
+  name: "cce-npe-agent"
+  demands: Agent.Name -equals npecepa001-npecceagent06
+  #demands: Agent.Name -equals npecepavm001-npecceagent01
+
+variables:
+  - group: CDE-COMMON-VG
+  - name: repoName
+    value: ""
+
+steps:
+- script: |
+    echo "*********************************"
+    echo "--- Running Build For BATCH  ---"
+    echo "********************************"
+    echo "Path is ::::   " $PATH
+    echo "Java Home is ::::   " $JAVA_HOME
+    echo "Java Home 11 X64 is :::: " $JAVA_HOME_11_x64
+    java -version
+    which ant
+    ant -version
+    echo " Build Repo Name ::: " $(Build.Repository.Name)
+    echo " System Default Working Dir ::: " $(System.DefaultWorkingDirectory)
+    #$repoName=`echo "$(Build.Repository.Name)" | cut -d "/" -f2`
+    #echo $(repoName)
+  displayName: 'Run a multi-line script'
+
+
+#- task: SSH@0
+#  displayName: 'Run shell inline on remote machine'
+#  inputs:
+#    sshEndpoint: 'RTB-SSH-SC'  # This should be a parameter
+#    runOptions: inline
+#    inline: |
+#      cd '/app/domains/rtbapp/RTB/dev1/admin/bin/'
+#      ls -lrt 
+      
+- task: Gradle@2
+  inputs:
+    gradleWrapperFile: 'gradlew'
+    tasks: 'build'
+    javaHomeOption: 'path'
+    # options: -x test 
+    # options: '--refresh-dependencies'
+    jdkVersionOption: '1.17'
+    jdkArchitectureOption: 'x64'
+    #jdkDirectory: '/usr/lib/jvm/java-11-openjdk-11.0.19.0.7-1.el7_9.x86_64/'
+    jdkDirectory: '/usr/lib/jvm/jdk-17.0.7+7/'
+    publishJUnitResults: true
+    testResultsFiles: '**/TEST-*.xml'
+    sonarQubeRunAnalysis: false
+
+- task: PowerShell@2
+  displayName: 'Create Sonarqube File'
+  inputs:
+    filePath: '$(System.DefaultWorkingDirectory)/azurebuild/createSonarqubeFile.ps1'
+- task: SonarQubePrepare@4
+  inputs:
+    SonarQube: 'CDE-SONARQUBE-SC'
+    scannerMode: 'CLI'
+    configMode: 'file'
+- task: SonarQubeAnalyze@4
+- task: SonarQubePublish@4
+  inputs:
+    pollingTimeoutSec: '300'
+
+- powershell: |
+    write-host "Initilize Variables."
+    $reponameps ="$(Build.Repository.Name)".Replace("RogersCommunications/","")
+    write-host "##vso[task.setvariable variable=repoName]$reponameps"  
+
+- task: Bash@3
+  inputs:
+    targetType: 'filePath'
+    filePath: "$(System.DefaultWorkingDirectory)/azurebuild/pushImage.sh"
+    #arguments: '-jfrogUserName $(JFROG_MIRROR_REPO_USER_NAME) -jfrogPassword $(JFROG_MIRROR_REPO_PASSWORD) $(DEV_ARTIFACTORY)'
+    arguments: '$(JFROG_MIRROR_REPO_USER_NAME) $(JFROG_MIRROR_REPO_PASSWORD) $(DEV_ARTIFACTORY) $(Build.BuildNumber) $(System.DefaultWorkingDirectory)/build/libs/ $(repoName)'
+    failOnStderr: true
+    workingDirectory: "$(System.DefaultWorkingDirectory)/build/libs/"

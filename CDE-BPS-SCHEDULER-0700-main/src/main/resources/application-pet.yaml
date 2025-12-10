@@ -1,0 +1,32 @@
+server:
+  logging:
+    level:
+      ROOT: INFO
+      org.springframework.web: INFO
+      com.rogers: INFO
+      io.micrometer: INFO
+azure:
+#  keyvault:
+#    enabled: false
+#    uri: ${keyvaulturi}
+#    client-id: ${keyvaultclientid}
+#    client-key: ${keyvaultclientkey}
+  application-insights:
+    enabled: true
+    logger:
+      level: info
+spring:
+  data:
+    cassandra:
+      contact-points: mazcaenpececosdb01.cassandra.cosmos.azure.com
+      local-datacenter: Canada East
+      port: 10350
+      keyspace-name: ccedev01
+      ssl: true
+  jackson:
+    default-property-inclusion: NON_NULL
+build-number: ${ccebuildnumber}
+secret:
+  encryptionAlgo: AES/CBC/PKCS5PADDING
+  algorythm: AES
+  encoding: UTF-8

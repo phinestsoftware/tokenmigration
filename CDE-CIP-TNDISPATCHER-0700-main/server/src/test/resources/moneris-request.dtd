@@ -1,0 +1,14 @@
+<!-- The Rogers Vault Request DTD -->
+        <!-- Main Elements -->
+        <!ELEMENT request (store_id, api_token, (res_add_cc | res_lookup_full | res_lookup_masked | res_batch ))>
+        <!ELEMENT store_id (#PCDATA)>
+        <!ELEMENT api_token (#PCDATA)>
+        <!-- Administrative transactions -->
+        <!ELEMENT res_batch ((res_add_cc | res_lookup_full | res_lookup_masked)+)>
+        <!ELEMENT res_add_cc (pan, card_type)>
+        <!ELEMENT res_lookup_full (data_key)>
+        <!ELEMENT res_lookup_masked (data_key, lookup_format)>
+        <!ELEMENT pan (#PCDATA)>
+        <!ELEMENT card_type (#PCDATA)>
+        <!ELEMENT data_key (#PCDATA)>
+        <!ELEMENT lookup_format (#PCDATA)>

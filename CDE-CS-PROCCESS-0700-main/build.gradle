@@ -1,0 +1,82 @@
+plugins {
+    id 'org.springframework.boot' version '2.3.6.RELEASE'
+    id 'io.spring.dependency-management' version '1.0.10.RELEASE'
+    id 'java'
+    id 'org.openapi.generator' version '4.3.1'
+}
+
+group = 'com.rogers'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '17'
+
+repositories {
+    mavenCentral()
+}
+
+springBoot {
+    buildInfo()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-rest'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-data-cassandra'
+    compile group: 'org.hibernate', name: 'hibernate-validator', version: '6.0.13.Final'
+    implementation 'org.hibernate:hibernate-validator:6.0.13.Final'
+    compile group: 'javax.persistence', name: 'persistence-api', version: '1.0'
+    compile group: 'org.springdoc' ,name: 'springdoc-openapi-ui', version: '1.4.0'
+    compile group: 'com.microsoft.azure', name: 'applicationinsights-spring-boot-starter', version: "2.6.1"
+    compile group: 'com.microsoft.azure', name: 'applicationinsights-logging-logback', version: "2.6.1"
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    implementation 'com.microsoft.azure:azure-keyvault-secrets-spring-boot-starter:2.1.7'
+    testImplementation('org.springframework.boot:spring-boot-starter-test') {
+        exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// Open APi Generator Config
+def inputSwaggerFilePath = "$rootDir/OpenAPISpec/cce-ms-creditoptions.yaml".toString()
+def outputDirPath = "$buildDir/openApi".toString()
+def generatedModelPkgName = "com.rogers.cce.creditoption.models"
+def modelPkgPath = generatedModelPkgName.toString().replaceAll("\\.","/")
+def sourcePath = "$outputDirPath/src/main/java/$modelPkgPath"
+def targetPath = "$rootDir/src/main/java/$modelPkgPath"
+
+openApiGenerate {
+    generatorName = "spring"
+    inputSpec = inputSwaggerFilePath
+    outputDir = outputDirPath
+    modelPackage = generatedModelPkgName
+    typeMappings = [
+            Double: "double",
+            Integer: "int",
+            Boolean: "boolean",
+            BigDecimal: "float"
+    ]
+    configOptions = [
+            dateLibrary: "java11",
+            serializableModel: "true",
+            hideGenerationTimestamp: "true"
+    ]
+    additionalProperties = [
+            useLombok: "true"
+    ]
+    templateDir = "$rootDir/OpenAPISpec/templates".toString()
+}
+
+task copyGeneratedModels(type: Copy){
+    from(sourcePath)
+    into(targetPath)
+}
+
+task generateModels(type: GradleBuild) {
+    tasks = ['clean', 'openApiGenerate', 'copyGeneratedModels'];
+}
+

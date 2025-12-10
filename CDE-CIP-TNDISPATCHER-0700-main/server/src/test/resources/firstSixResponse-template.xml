@@ -1,0 +1,25 @@
+<env:Envelope xmlns:env='http://schemas.xmlsoap.org/soap/envelope/'
+              env:encodingStyle='http://schema.xmlsoap.org/soap/encoding/'>
+    <env:Header>
+    </env:Header>
+    <env:Body>
+        <urn:responseMessages xmlns:urn='urn:schemas-cybersource-com:transaction-data-2.3'>
+            <responseMessage>
+                <srcSystem>
+                    <name>true</name>
+                    <sysIndicator>false</sysIndicator>
+                    <messageId>@{messageId}</messageId>
+                </srcSystem>
+                <reasonCode>@{reasonCode}</reasonCode>
+                <vault>
+                    <cardFirstSix>@{cardFirstSix}</cardFirstSix>
+                </vault>
+                <rm>
+                    <rflag>@{rflag}</rflag>
+                    <rmsg>@{rmsg}</rmsg>
+                </rm>
+                <ccFirstSixService run="true"/>
+            </responseMessage>
+        </urn:responseMessages>
+    </env:Body>
+</env:Envelope>

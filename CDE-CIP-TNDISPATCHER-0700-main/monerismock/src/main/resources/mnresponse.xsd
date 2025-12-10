@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="response">
+    <xs:complexType>
+      <xs:sequence>
+	<xs:element minOccurs="1" maxOccurs="500" ref="receipt" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="receipt">
+    <xs:complexType>
+      <xs:all>
+	<xs:element ref="DataKey" />
+	<xs:element ref="ResponseCode" />
+	<xs:element ref="Message" />
+	<xs:element ref="CardType" />
+	<xs:element minOccurs="0" maxOccurs="1" ref="Pan" />
+	<xs:element minOccurs="0" maxOccurs="1" ref="MaskedPan" />
+	<xs:element ref="ResponseFlag" />
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="DataKey">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+	<xs:maxLength value="25"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="ResponseCode">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+	<xs:maxLength value="3"/>
+	<xs:pattern value="100|101|102|103|104|105|106|200|201|null"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="Message">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+	<xs:pattern value="[a-zA-Z0-9_]*"/>
+	<xs:maxLength value="100"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="CardType">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+	<xs:maxLength value="1"/>
+	<xs:pattern value="[VMAD]"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="Pan">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+	<xs:maxLength value="20"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="MaskedPan">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+	<xs:maxLength value="20"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="ResponseFlag">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+	<xs:pattern value="ACCEPT|REJECT|null"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+</xs:schema>

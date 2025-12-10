@@ -1,0 +1,9 @@
+.#*
+*#
+*~
+.classpath
+.project
+.settings
+jacoco/
+target/
+settings.xml

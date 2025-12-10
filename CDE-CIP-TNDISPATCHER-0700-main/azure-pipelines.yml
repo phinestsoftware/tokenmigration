@@ -1,0 +1,73 @@
+# Ant ##
+# Build your Java projects and run tests with Apache Ant.
+# Add steps that save build artifacts and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/java
+
+trigger: 
+  - main
+  - "CDE*"  
+
+pool:
+  name: "cce-npe-agent"
+  demands: Agent.Name -equals npecepavm003-npecceagent05
+
+variables:
+
+  - group: CDE-COMMON-VG
+  - name: repoName
+    value: ""
+  - name: BUILD_NUMBER
+    value: '$(Build.BuildNumber)'
+  - name: tag
+    value: '$(Build.BuildId)'
+
+jobs:
+- job: "MicroService"
+  cancelTimeoutInMinutes: 60
+  steps:
+  - task: Bash@3
+    inputs:
+      targetType: 'inline'
+      script: |
+        echo 'HOSTNAME custom'
+        echo $HOSTNAME
+  - powershell: |
+      write-host "Initilize Variables."
+      $reponameps ="$(Build.Repository.Name)".Replace("RogersCommunications/","")
+      write-host "##vso[task.setvariable variable=repoName]$reponameps"
+  - task: Maven@3
+    inputs:
+      mavenPomFile: 'pom.xml'
+      options: '-Dusername=$(JFROG_MIRROR_REPO_USER_NAME) -Dpassword=$(JFROG_MIRROR_REPO_PASSWORD) -DrepoKey=$(DEV_ARTIFACTORY)'
+      #options: '-Xmx3072m'  # Optional: Additional Maven options
+      jdkVersionOption: '1.17'
+      jdkArchitectureOption: 'x64'
+      #jdkDirectory: '/usr/lib/jvm/jdk-17.0.7+7/'
+      jdkDirectory: '/usr/lib/jvm/java-17-openjdk-17.0.10.0.7-2.el8.x86_64/'
+      goals: 'clean deploy'
+      publishJUnitResults: true
+      testResultsFiles: '**/surefire-reports/TEST-*.xml'
+      sonarQubeRunAnalysis: false
+  - task: PowerShell@2
+    displayName: 'Create Sonarqube File'
+    inputs:
+      filePath: '$(System.DefaultWorkingDirectory)/azurebuild/createSonarqubeFile.ps1'
+  - task: SonarQubePrepare@5
+    inputs:
+      SonarQube: 'CDE-SONARQUBE-SC'
+      scannerMode: 'CLI'
+      configMode: 'file'
+  - task: SonarQubeAnalyze@5
+    inputs:
+      jdkversion: 'JAVA_HOME_17_X64'
+  - task: SonarQubePublish@5
+    inputs:
+      pollingTimeoutSec: '300'
+  - task: Bash@3
+    inputs:
+      targetType: 'filePath'
+      filePath: "$(System.DefaultWorkingDirectory)/azurebuild/pushImage.sh"
+      #arguments: '-jfrogUserName $(JFROG_MIRROR_REPO_USER_NAME) -jfrogPassword $(JFROG_MIRROR_REPO_PASSWORD) $(DEV_ARTIFACTORY)'
+      arguments: '$(JFROG_MIRROR_REPO_USER_NAME) $(JFROG_MIRROR_REPO_PASSWORD) $(DEV_ARTIFACTORY) $(Build.BuildNumber) $(System.DefaultWorkingDirectory)/server/target/ $(repoName)'
+      failOnStderr: true
+      workingDirectory: "$(System.DefaultWorkingDirectory)/server/target/"

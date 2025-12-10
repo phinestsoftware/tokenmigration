@@ -1,0 +1,1 @@
+TN Dispatcher ${application.version} ${AnsiColor.GREEN}Started${AnsiColor.DEFAULT}

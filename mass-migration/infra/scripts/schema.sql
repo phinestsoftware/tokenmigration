@@ -1,0 +1,362 @@
+-- =====================================================
+-- Token Migration Database Schema
+-- Version: 1.0.0
+-- Description: Schema for Mass Migration Azure Functions
+-- =====================================================
+
+-- Enable ANSI settings
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+-- =====================================================
+-- 1. MONERIS_TOKENS_STAGING
+-- Stores input Moneris tokens with migration status
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[MONERIS_TOKENS_STAGING]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[MONERIS_TOKENS_STAGING] (
+        [ID] BIGINT IDENTITY(1,1) NOT NULL,
+        [FILE_ID] VARCHAR(50) NOT NULL,
+        [BATCH_ID] VARCHAR(50) NULL,
+        [MONERIS_TOKEN] VARCHAR(16) NOT NULL,
+        [EXP_DATE] VARCHAR(4) NULL,
+        [ENTITY_ID] VARCHAR(36) NULL,
+        [ENTITY_TYPE] CHAR(1) NULL,
+        [ENTITY_STS] CHAR(1) NULL,
+        [CREATION_DATE] DATE NULL,
+        [LAST_USE_DATE] DATE NULL,
+        [TRX_SEQ_NO] VARCHAR(36) NULL,
+        [BUSINESS_UNIT] VARCHAR(20) NULL,
+        [VALIDATION_STATUS] VARCHAR(20) DEFAULT 'PENDING',
+        [MIGRATION_STATUS] VARCHAR(20) DEFAULT 'PENDING',
+        [ERROR_CODE] VARCHAR(20) NULL,
+        [PMR] VARCHAR(16) NULL,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        [UPDATED_BY] VARCHAR(50) NULL,
+        CONSTRAINT [PK_MONERIS_TOKENS_STAGING] PRIMARY KEY CLUSTERED ([ID] ASC)
+    );
+
+    -- Indexes for common queries
+    CREATE NONCLUSTERED INDEX [IX_MONERIS_FILE_ID] ON [dbo].[MONERIS_TOKENS_STAGING] ([FILE_ID]);
+    CREATE NONCLUSTERED INDEX [IX_MONERIS_BATCH_ID] ON [dbo].[MONERIS_TOKENS_STAGING] ([BATCH_ID]);
+    CREATE NONCLUSTERED INDEX [IX_MONERIS_TOKEN] ON [dbo].[MONERIS_TOKENS_STAGING] ([MONERIS_TOKEN]);
+    CREATE NONCLUSTERED INDEX [IX_MONERIS_VALIDATION_STATUS] ON [dbo].[MONERIS_TOKENS_STAGING] ([VALIDATION_STATUS]);
+    CREATE NONCLUSTERED INDEX [IX_MONERIS_MIGRATION_STATUS] ON [dbo].[MONERIS_TOKENS_STAGING] ([MIGRATION_STATUS]);
+END
+GO
+
+-- =====================================================
+-- 2. PG_TOKENS_STAGING
+-- Stores Mastercard response tokens
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_TOKENS_STAGING]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[PG_TOKENS_STAGING] (
+        [ID] BIGINT IDENTITY(1,1) NOT NULL,
+        [FILE_ID] VARCHAR(50) NOT NULL,
+        [BATCH_ID] VARCHAR(50) NULL,
+        [MONERIS_TOKEN] VARCHAR(16) NOT NULL,
+        [PG_TOKEN] VARCHAR(16) NULL,
+        [CARD_NUMBER_MASKED] VARCHAR(20) NULL,
+        [CARD_BRAND] VARCHAR(20) NULL,
+        [FIRST_SIX] VARCHAR(6) NULL,
+        [LAST_FOUR] VARCHAR(4) NULL,
+        [FUNDING_METHOD] VARCHAR(20) NULL,
+        [EXP_DATE] VARCHAR(4) NULL,
+        [EXP_MONTH] VARCHAR(2) NULL,
+        [EXP_YEAR] VARCHAR(2) NULL,
+        [RESULT] VARCHAR(20) NULL,
+        [ERROR_CAUSE] VARCHAR(50) NULL,
+        [ERROR_EXPLANATION] VARCHAR(255) NULL,
+        [ERROR_FIELD] VARCHAR(50) NULL,
+        [ERROR_SUPPORT_CODE] VARCHAR(20) NULL,
+        [SCHEME_TOKEN_STATUS] VARCHAR(50) NULL,
+        [MIGRATION_STATUS] VARCHAR(20) DEFAULT 'PENDING',
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_PG_TOKENS_STAGING] PRIMARY KEY CLUSTERED ([ID] ASC)
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_PG_FILE_ID] ON [dbo].[PG_TOKENS_STAGING] ([FILE_ID]);
+    CREATE NONCLUSTERED INDEX [IX_PG_BATCH_ID] ON [dbo].[PG_TOKENS_STAGING] ([BATCH_ID]);
+    CREATE NONCLUSTERED INDEX [IX_PG_MONERIS_TOKEN] ON [dbo].[PG_TOKENS_STAGING] ([MONERIS_TOKEN]);
+    CREATE NONCLUSTERED INDEX [IX_PG_RESULT] ON [dbo].[PG_TOKENS_STAGING] ([RESULT]);
+END
+GO
+
+-- =====================================================
+-- 3. TOKEN_MIGRATION_BATCH
+-- Tracks files and batches for reporting
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TOKEN_MIGRATION_BATCH]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[TOKEN_MIGRATION_BATCH] (
+        [ID] BIGINT IDENTITY(1,1) NOT NULL,
+        [BATCH_ID] VARCHAR(50) NOT NULL,
+        [FILE_ID] VARCHAR(50) NULL,
+        [FILE_NAME] VARCHAR(255) NULL,
+        [SOURCE_ID] VARCHAR(20) NULL,
+        [TOKEN_TYPE] CHAR(1) NULL,
+        [MIGRATION_TYPE] VARCHAR(20) NULL,
+        [CONTEXT] VARCHAR(20) NULL,
+        [STATUS] VARCHAR(20) DEFAULT 'PENDING',
+        [TOTAL_TOKEN_COUNT] INT DEFAULT 0,
+        [VALID_TOKEN_COUNT] INT DEFAULT 0,
+        [SUCCESS_COUNT] INT DEFAULT 0,
+        [FAILURE_COUNT] INT DEFAULT 0,
+        [BATCH_SIZE] INT NULL,
+        [BATCH_NUMBER] INT NULL,
+        [TOTAL_BATCHES] INT NULL,
+        [FILE_TIMESTAMP] DATETIME2 NULL,
+        [PROCESS_START_TIME] DATETIME2 NULL,
+        [PROCESS_END_TIME] DATETIME2 NULL,
+        [BLOB_CONTAINER] VARCHAR(100) NULL,
+        [BLOB_PATH] VARCHAR(500) NULL,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_TOKEN_MIGRATION_BATCH] PRIMARY KEY CLUSTERED ([ID] ASC),
+        CONSTRAINT [UQ_BATCH_ID] UNIQUE ([BATCH_ID])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_BATCH_FILE_ID] ON [dbo].[TOKEN_MIGRATION_BATCH] ([FILE_ID]);
+    CREATE NONCLUSTERED INDEX [IX_BATCH_STATUS] ON [dbo].[TOKEN_MIGRATION_BATCH] ([STATUS]);
+    CREATE NONCLUSTERED INDEX [IX_BATCH_SOURCE_ID] ON [dbo].[TOKEN_MIGRATION_BATCH] ([SOURCE_ID]);
+END
+GO
+
+-- =====================================================
+-- 4. TOKEN_MIGRATION_AUDIT_LOG
+-- JSON-based audit logging
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TOKEN_MIGRATION_AUDIT_LOG]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[TOKEN_MIGRATION_AUDIT_LOG] (
+        [ID] BIGINT IDENTITY(1,1) NOT NULL,
+        [FILE_ID] VARCHAR(50) NULL,
+        [BATCH_ID] VARCHAR(50) NULL,
+        [MESSAGE_CODE] VARCHAR(20) NULL,
+        [MESSAGE_TEXT] VARCHAR(500) NULL,
+        [ADDITIONAL_INFO] NVARCHAR(MAX) NULL,
+        [LOG_LEVEL] VARCHAR(20) DEFAULT 'INFO',
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        CONSTRAINT [PK_TOKEN_MIGRATION_AUDIT_LOG] PRIMARY KEY CLUSTERED ([ID] ASC)
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_AUDIT_FILE_ID] ON [dbo].[TOKEN_MIGRATION_AUDIT_LOG] ([FILE_ID]);
+    CREATE NONCLUSTERED INDEX [IX_AUDIT_BATCH_ID] ON [dbo].[TOKEN_MIGRATION_AUDIT_LOG] ([BATCH_ID]);
+    CREATE NONCLUSTERED INDEX [IX_AUDIT_CREATED_AT] ON [dbo].[TOKEN_MIGRATION_AUDIT_LOG] ([CREATED_AT] DESC);
+END
+GO
+
+-- =====================================================
+-- 5. MIGRATION_ERROR_DETAILS
+-- Detailed error tracking per token
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[MIGRATION_ERROR_DETAILS]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[MIGRATION_ERROR_DETAILS] (
+        [ID] BIGINT IDENTITY(1,1) NOT NULL,
+        [FILE_ID] VARCHAR(50) NULL,
+        [BATCH_ID] VARCHAR(50) NULL,
+        [MONERIS_TOKEN] VARCHAR(16) NULL,
+        [PG_TOKEN] VARCHAR(16) NULL,
+        [ENTITY_ID] VARCHAR(36) NULL,
+        [PMR] VARCHAR(16) NULL,
+        [ERROR_CODE] VARCHAR(20) NULL,
+        [ERROR_MESSAGE] VARCHAR(500) NULL,
+        [ERROR_FIELD] VARCHAR(50) NULL,
+        [ERROR_TYPE] VARCHAR(50) NULL,
+        [RETRY_COUNT] INT DEFAULT 0,
+        [IS_RETRYABLE] BIT DEFAULT 1,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        CONSTRAINT [PK_MIGRATION_ERROR_DETAILS] PRIMARY KEY CLUSTERED ([ID] ASC)
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_ERROR_FILE_ID] ON [dbo].[MIGRATION_ERROR_DETAILS] ([FILE_ID]);
+    CREATE NONCLUSTERED INDEX [IX_ERROR_BATCH_ID] ON [dbo].[MIGRATION_ERROR_DETAILS] ([BATCH_ID]);
+    CREATE NONCLUSTERED INDEX [IX_ERROR_MONERIS_TOKEN] ON [dbo].[MIGRATION_ERROR_DETAILS] ([MONERIS_TOKEN]);
+END
+GO
+
+-- =====================================================
+-- 6. TOKEN_MIGRATION_WORKERS
+-- Tracks worker instances
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TOKEN_MIGRATION_WORKERS]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[TOKEN_MIGRATION_WORKERS] (
+        [ID] BIGINT IDENTITY(1,1) NOT NULL,
+        [WORKER_ID] VARCHAR(50) NOT NULL,
+        [BATCH_ID] VARCHAR(50) NULL,
+        [FILE_ID] VARCHAR(50) NULL,
+        [MODE] VARCHAR(20) NULL,
+        [STATUS] VARCHAR(20) DEFAULT 'IDLE',
+        [TOKENS_PROCESSED] INT DEFAULT 0,
+        [STARTED_AT] DATETIME2 NULL,
+        [COMPLETED_AT] DATETIME2 NULL,
+        [LAST_HEARTBEAT] DATETIME2 NULL,
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_TOKEN_MIGRATION_WORKERS] PRIMARY KEY CLUSTERED ([ID] ASC),
+        CONSTRAINT [UQ_WORKER_ID] UNIQUE ([WORKER_ID])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_WORKER_STATUS] ON [dbo].[TOKEN_MIGRATION_WORKERS] ([STATUS]);
+    CREATE NONCLUSTERED INDEX [IX_WORKER_BATCH_ID] ON [dbo].[TOKEN_MIGRATION_WORKERS] ([BATCH_ID]);
+END
+GO
+
+-- =====================================================
+-- 7. MIGRATION_CONFIG
+-- Configuration reference table
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[MIGRATION_CONFIG]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[MIGRATION_CONFIG] (
+        [ID] INT IDENTITY(1,1) NOT NULL,
+        [SOURCE_ID] VARCHAR(20) NULL,
+        [CONFIG_KEY] VARCHAR(50) NOT NULL,
+        [CONFIG_VALUE] VARCHAR(255) NULL,
+        [DESCRIPTION] VARCHAR(255) NULL,
+        [IS_ACTIVE] BIT DEFAULT 1,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_MIGRATION_CONFIG] PRIMARY KEY CLUSTERED ([ID] ASC)
+    );
+
+    CREATE UNIQUE NONCLUSTERED INDEX [UQ_CONFIG_KEY_SOURCE] ON [dbo].[MIGRATION_CONFIG] ([SOURCE_ID], [CONFIG_KEY]);
+END
+GO
+
+-- =====================================================
+-- 8. Insert Default Configuration
+-- =====================================================
+IF NOT EXISTS (SELECT 1 FROM [dbo].[MIGRATION_CONFIG] WHERE [CONFIG_KEY] = 'DEFAULT_BATCH_SIZE')
+BEGIN
+    INSERT INTO [dbo].[MIGRATION_CONFIG] ([SOURCE_ID], [CONFIG_KEY], [CONFIG_VALUE], [DESCRIPTION])
+    VALUES
+        (NULL, 'DEFAULT_BATCH_SIZE', '1000', 'Default batch size for all sources'),
+        (NULL, 'FAILURE_THRESHOLD_PERCENT', '50', 'Percentage of failures to reject file'),
+        (NULL, 'MAX_ACTIVE_WORKERS', '10', 'Maximum concurrent batch workers'),
+        (NULL, 'RETRY_MAX_COUNT', '3', 'Maximum retry attempts for failed tokens'),
+        (NULL, 'FILE_ENCRYPTION_ENABLED', 'false', 'Enable file encryption for output'),
+        ('V21', 'BATCH_SIZE', '1000', 'Batch size for V21 source'),
+        ('V21', 'OUTPUT_ENCRYPTION', 'false', 'Encryption for V21 output files'),
+        ('WINM', 'BATCH_SIZE', '500', 'Batch size for WinOnline Media source'),
+        ('WINM', 'OUTPUT_ENCRYPTION', 'true', 'Encryption for WinOnline Media output files'),
+        ('TSC', 'BATCH_SIZE', '1000', 'Batch size for TSC source'),
+        ('TSC', 'OUTPUT_ENCRYPTION', 'false', 'Encryption for TSC output files');
+END
+GO
+
+-- =====================================================
+-- 9. Create Views for Reporting
+-- =====================================================
+IF EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'[dbo].[VW_MIGRATION_SUMMARY]'))
+    DROP VIEW [dbo].[VW_MIGRATION_SUMMARY]
+GO
+
+CREATE VIEW [dbo].[VW_MIGRATION_SUMMARY] AS
+SELECT
+    b.FILE_ID,
+    b.FILE_NAME,
+    b.SOURCE_ID,
+    b.TOKEN_TYPE,
+    b.MIGRATION_TYPE,
+    b.STATUS AS FILE_STATUS,
+    b.TOTAL_TOKEN_COUNT,
+    b.VALID_TOKEN_COUNT,
+    SUM(CASE WHEN m.MIGRATION_STATUS = 'COMPLETED' THEN 1 ELSE 0 END) AS MIGRATED_COUNT,
+    SUM(CASE WHEN m.MIGRATION_STATUS = 'FAILED' THEN 1 ELSE 0 END) AS FAILED_COUNT,
+    SUM(CASE WHEN m.MIGRATION_STATUS = 'PENDING' THEN 1 ELSE 0 END) AS PENDING_COUNT,
+    b.PROCESS_START_TIME,
+    b.PROCESS_END_TIME,
+    DATEDIFF(SECOND, b.PROCESS_START_TIME, ISNULL(b.PROCESS_END_TIME, GETUTCDATE())) AS DURATION_SECONDS
+FROM [dbo].[TOKEN_MIGRATION_BATCH] b
+LEFT JOIN [dbo].[MONERIS_TOKENS_STAGING] m ON b.FILE_ID = m.FILE_ID
+WHERE b.FILE_ID IS NOT NULL AND b.BATCH_ID = b.FILE_ID -- File-level record
+GROUP BY
+    b.FILE_ID, b.FILE_NAME, b.SOURCE_ID, b.TOKEN_TYPE, b.MIGRATION_TYPE,
+    b.STATUS, b.TOTAL_TOKEN_COUNT, b.VALID_TOKEN_COUNT, b.PROCESS_START_TIME, b.PROCESS_END_TIME
+GO
+
+IF EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'[dbo].[VW_BATCH_STATUS]'))
+    DROP VIEW [dbo].[VW_BATCH_STATUS]
+GO
+
+CREATE VIEW [dbo].[VW_BATCH_STATUS] AS
+SELECT
+    b.BATCH_ID,
+    b.FILE_ID,
+    b.SOURCE_ID,
+    b.STATUS,
+    b.BATCH_NUMBER,
+    b.TOTAL_BATCHES,
+    b.BATCH_SIZE,
+    b.SUCCESS_COUNT,
+    b.FAILURE_COUNT,
+    b.PROCESS_START_TIME,
+    b.PROCESS_END_TIME,
+    DATEDIFF(SECOND, b.PROCESS_START_TIME, ISNULL(b.PROCESS_END_TIME, GETUTCDATE())) AS DURATION_SECONDS
+FROM [dbo].[TOKEN_MIGRATION_BATCH] b
+WHERE b.FILE_ID IS NOT NULL AND b.BATCH_ID != b.FILE_ID -- Batch-level records
+GO
+
+-- =====================================================
+-- 10. Stored Procedures
+-- =====================================================
+
+-- Get configuration value
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SP_GET_CONFIG]') AND type in (N'P'))
+    DROP PROCEDURE [dbo].[SP_GET_CONFIG]
+GO
+
+CREATE PROCEDURE [dbo].[SP_GET_CONFIG]
+    @SourceId VARCHAR(20) = NULL,
+    @ConfigKey VARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT TOP 1 CONFIG_VALUE
+    FROM [dbo].[MIGRATION_CONFIG]
+    WHERE CONFIG_KEY = @ConfigKey
+      AND (SOURCE_ID = @SourceId OR (SOURCE_ID IS NULL AND @SourceId IS NULL))
+      AND IS_ACTIVE = 1
+    ORDER BY
+        CASE WHEN SOURCE_ID IS NOT NULL THEN 0 ELSE 1 END; -- Prefer source-specific config
+END
+GO
+
+-- Update batch statistics
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SP_UPDATE_BATCH_STATS]') AND type in (N'P'))
+    DROP PROCEDURE [dbo].[SP_UPDATE_BATCH_STATS]
+GO
+
+CREATE PROCEDURE [dbo].[SP_UPDATE_BATCH_STATS]
+    @BatchId VARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE b
+    SET
+        b.SUCCESS_COUNT = stats.SuccessCount,
+        b.FAILURE_COUNT = stats.FailureCount,
+        b.UPDATED_AT = GETUTCDATE()
+    FROM [dbo].[TOKEN_MIGRATION_BATCH] b
+    CROSS APPLY (
+        SELECT
+            SUM(CASE WHEN MIGRATION_STATUS = 'COMPLETED' THEN 1 ELSE 0 END) AS SuccessCount,
+            SUM(CASE WHEN MIGRATION_STATUS = 'FAILED' THEN 1 ELSE 0 END) AS FailureCount
+        FROM [dbo].[MONERIS_TOKENS_STAGING]
+        WHERE BATCH_ID = @BatchId
+    ) stats
+    WHERE b.BATCH_ID = @BatchId;
+END
+GO
+
+PRINT 'Schema creation completed successfully.'
+GO

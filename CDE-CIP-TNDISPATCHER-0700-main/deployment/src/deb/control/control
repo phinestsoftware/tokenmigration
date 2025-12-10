@@ -1,0 +1,8 @@
+Package: TNDispatcher-Server
+Version: [[version]] 
+Section: misc
+Priority: low
+Architecture: all
+Depends: 
+Description: [[description]]
+Maintainer: maciej.szatanski@semafone.com

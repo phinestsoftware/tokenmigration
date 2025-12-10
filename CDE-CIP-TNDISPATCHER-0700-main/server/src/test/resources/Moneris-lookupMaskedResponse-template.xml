@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+    <receipt>
+        <DataKey>@{dataKey}</DataKey>
+        <ResponseCode>@{responseCode}</ResponseCode>
+        <Message>@{message}</Message>
+        <CardType>@{cardType}</CardType>
+        <MaskedPan>@{maskedPan}</MaskedPan>
+        <ResponseFlag>@{responseFlag}</ResponseFlag>
+    </receipt>
+</response>

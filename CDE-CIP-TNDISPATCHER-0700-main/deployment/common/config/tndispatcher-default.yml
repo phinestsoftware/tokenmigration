@@ -1,0 +1,18 @@
+server:
+  address: 127.0.0.1
+  port: 7050
+  tomcat.max-connections: 100
+
+semafone:
+  http:
+    max.connections: 100
+    connection.timeout.millis: 30000
+    request.connection.timeout.millis: 1000
+    request.read.timeout.millis: 30000
+  https.certificate:
+    allowUntrusted: false
+#    skipValidationFor:
+  endpoints:
+#    moneris: https://10.20.17.2:7051/moneris
+
+logging.config: /pkg/tndispatcher/config/logback-tndispatcher.xml

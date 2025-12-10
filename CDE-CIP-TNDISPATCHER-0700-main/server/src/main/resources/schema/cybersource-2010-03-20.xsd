@@ -1,0 +1,172 @@
+<xs:schema elementFormDefault="unqualified" targetNamespace="urn:schemas-cybersource-com:transaction-data-2.3"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+>
+
+    <xs:element name="requestMessages">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element minOccurs="0" name="requestId" type="xs:string"/>
+                <xs:element maxOccurs="unbounded" name="requestMessage">
+                    <xs:complexType>
+                        <xs:all>
+                            <xs:element minOccurs="0" name="srcSystem">
+                                <xs:complexType>
+                                    <xs:all>
+                                        <xs:element name="name" minOccurs="0" type="xs:string"/>
+                                        <xs:element name="messageId" minOccurs="0" type="xs:string"/>
+                                        <xs:element name="sysIndicator" type="xs:string" maxOccurs="1" minOccurs="0"/>
+                                    </xs:all>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="card">
+                                <xs:complexType>
+                                    <xs:all>
+                                        <xs:element minOccurs="0" name="accountNumber">
+                                            <xs:simpleType>
+                                                <xs:restriction base="xs:string">
+                                                    <xs:minLength value="14"/>
+                                                    <xs:maxLength value="19"/>
+                                                </xs:restriction>
+                                            </xs:simpleType>
+                                        </xs:element>
+                                        <xs:element minOccurs="0" name="expirationMonth">
+                                            <xs:simpleType>
+                                                <xs:restriction base="xs:string">
+                                                    <xs:length value="2"/>
+                                                </xs:restriction>
+                                            </xs:simpleType>
+                                        </xs:element>
+                                        <xs:element minOccurs="0" name="expirationYear">
+                                            <xs:simpleType>
+                                                <xs:restriction base="xs:string">
+                                                    <xs:length value="4"/>
+                                                </xs:restriction>
+                                            </xs:simpleType>
+                                        </xs:element>
+                                        <xs:element minOccurs="0" name="cardType">
+                                            <xs:simpleType>
+                                                <xs:restriction base="xs:string"/>
+                                            </xs:simpleType>
+                                        </xs:element>
+                                        <xs:element minOccurs="0" name="token">
+                                            <xs:simpleType>
+                                                <xs:restriction base="xs:string">
+                                                    <xs:length value="16"/>
+                                                </xs:restriction>
+                                            </xs:simpleType>
+                                        </xs:element>
+                                    </xs:all>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element minOccurs="0" name="user">
+                                <xs:complexType>
+                                    <xs:all>
+                                        <xs:element name="userName" minOccurs="0" type="xs:string"/>
+                                        <xs:element name="userId" minOccurs="0" type="xs:string"/>
+                                    </xs:all>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element maxOccurs="1" minOccurs="0" name="ccTokenizeService">
+                                <xs:complexType>
+                                    <xs:attribute name="run" type="xs:boolean" use="required"/>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element maxOccurs="1" minOccurs="0" name="ccDeTokenizeService">
+                                <xs:complexType>
+                                    <xs:attribute name="run" type="xs:boolean" use="required"/>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element maxOccurs="1" minOccurs="0" name="ccFirstSixService">
+                                <xs:complexType>
+                                    <xs:attribute name="run" type="xs:boolean" use="required"/>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element maxOccurs="1" minOccurs="0" name="ccVerifyService">
+                                <xs:complexType>
+                                    <xs:attribute name="run" type="xs:boolean" use="required"/>
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:all>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+    <xs:element name="responseMessages">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element maxOccurs="unbounded" name="responseMessage">
+                    <xs:complexType>
+                        <xs:all>
+                            <xs:element minOccurs="0" name="srcSystem">
+                                <xs:complexType>
+                                    <xs:all>
+                                        <xs:element name="name" type="xs:string"/>
+                                        <xs:element name="messageId" type="xs:string"/>
+                                        <xs:element name="sysIndicator" type="xs:string" maxOccurs="1" minOccurs="0"/>
+                                    </xs:all>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element minOccurs="0" name="reasonCode" type="xs:int"/>
+                            <xs:element minOccurs="0" name="vault">
+                                <xs:complexType>
+                                    <xs:all>
+                                        <xs:element minOccurs="0" name="token" type="xs:string"/>
+                                        <xs:element minOccurs="0" name="cardFirstSix" type="xs:string"/>
+                                        <xs:element minOccurs="0" name="creditCardNumber" type="xs:string"/>
+                                        <xs:element minOccurs="0" name="cardType">
+                                            <xs:simpleType>
+                                                <xs:restriction base="xs:string">
+                                                    <xs:enumeration value="V"/>
+                                                    <xs:enumeration value="M"/>
+                                                    <xs:enumeration value="D"/>
+                                                    <xs:enumeration value="A"/>
+                                                </xs:restriction>
+                                            </xs:simpleType>
+                                        </xs:element>
+                                    </xs:all>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element minOccurs="0" name="rm">
+                                <xs:complexType>
+                                    <xs:all>
+                                        <xs:element name="rflag" type="xs:string"/>
+                                        <xs:element name="rmsg" type="xs:string"/>
+                                    </xs:all>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element minOccurs="0" name="user">
+                                <xs:complexType>
+                                    <xs:all>
+                                        <xs:element name="userName" type="xs:string"/>
+                                        <xs:element name="userId" type="xs:string"/>
+                                    </xs:all>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element maxOccurs="1" minOccurs="0" name="ccTokenizeService">
+                                <xs:complexType>
+                                    <xs:attribute name="run" type="xs:boolean" use="required"/>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element maxOccurs="1" minOccurs="0" name="ccDeTokenizeService">
+                                <xs:complexType>
+                                    <xs:attribute name="run" type="xs:boolean" use="required"/>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element maxOccurs="1" minOccurs="0" name="ccFirstSixService">
+                                <xs:complexType>
+                                    <xs:attribute name="run" type="xs:boolean" use="required"/>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element maxOccurs="1" minOccurs="0" name="ccVerifyService">
+                                <xs:complexType>
+                                    <xs:attribute name="run" type="xs:boolean" use="required"/>
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:all>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>

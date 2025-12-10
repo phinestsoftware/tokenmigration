@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Configuration status="info" monitorInterval="60">
+
+    <Properties>
+        <Property name="basePath">/pkg/dpm/mule/logs/</Property>
+    </Properties>
+
+    <!-- Define Appender -->
+    <Appenders>
+        <!--  Console  -->
+        <Console name="CONSOLE" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d %-5p [%c] (%t) %m%n"/>
+        </Console>
+
+        <!-- ===================================================================== -->
+        <!-- mule-app-cde_integration-common.log                                   -->
+        <!-- ===================================================================== -->
+        <RollingFile name="file_common"
+                     fileName="${basePath}/mule-app-cde_integration-common.log"
+                     filePattern="${basePath}/mule-app-cde_integration-common.log.%d{yyyy-MM-dd}.gz">
+            <PatternLayout pattern="%d %-5p [%c] (%t) %m%n"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+            </Policies>
+            <DefaultRolloverStrategy>
+                <Delete basePath="${basePath}/" followLinks="true">
+                    <IfFileName glob="mule-app-cde_integration-common.log*.gz"/>
+                    <IfLastModified age="30D"/>
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingFile>
+
+        <!-- ===================================================================== -->
+        <!--             mule-app-cde_integration-cs_proxy.log                     -->
+        <!-- ===================================================================== -->
+        <RollingFile name="file_cs_proxy"
+                     fileName="${basePath}/mule-app-cde_integration-cs_proxy.log"
+                     filePattern="${basePath}/mule-app-cde_integration-cs_proxy.log.%d{yyyy-MM-dd}.gz">
+            <PatternLayout pattern="%d %-5p [%c] (%t) %m%n"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+            </Policies>
+            <DefaultRolloverStrategy>
+                <Delete basePath="${basePath}/" followLinks="true">
+                    <IfFileName glob="mule-app-cde_integration-cs_proxy.log*.gz"/>
+                    <IfLastModified age="30D"/>
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingFile>
+    </Appenders>
+    <Loggers>
+        <Logger name="common" additivity="false" level="INFO">
+            <AppenderRef ref="file_common"/>
+        </Logger>
+        <Logger name="cs_proxy" additivity="false" level="INFO">
+            <AppenderRef ref="file_cs_proxy"/>
+        </Logger>
+
+        <!-- Generic CIP logger -->
+        <Root level="INFO">
+            <AppenderRef ref="file_common"/>
+        </Root>
+    </Loggers>
+</Configuration>

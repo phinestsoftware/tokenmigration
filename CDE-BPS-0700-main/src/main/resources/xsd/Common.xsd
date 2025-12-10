@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://www.semafone.com"
+           xmlns="http://www.semafone.com"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+
+    <xs:complexType name="ErrorType">
+        <xs:sequence>
+            <xs:element name="code" type="xs:string" minOccurs="1" maxOccurs="1"/>
+            <xs:element name="name" type="xs:string" minOccurs="0" maxOccurs="1"/>
+            <xs:element name="desc" type="xs:string" minOccurs="0" maxOccurs="1"/>
+            <xs:element name="cause" type="xs:string" minOccurs="0" maxOccurs="1"/>
+            <xs:element name="remedy" type="xs:string" minOccurs="0" maxOccurs="1"/>
+            <xs:element name="stackTrace" type="xs:string" minOccurs="0" maxOccurs="1"/>
+        </xs:sequence>
+    </xs:complexType>
+
+
+    <xs:simpleType name="ResultType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="SUCCESS"/>
+            <xs:enumeration value="FAIL"/>
+        </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:simpleType name="FormatType">
+    	<xs:restriction base="xs:string">
+    		<xs:enumeration value="TXT"></xs:enumeration>
+			<xs:enumeration value="ZIP"></xs:enumeration>			
+    	</xs:restriction>
+    </xs:simpleType> 
+    
+    <xs:complexType name="FileNameListType">
+        <xs:sequence>
+            <xs:element name="fileName"   type="xs:string"     minOccurs="0" maxOccurs="unbounded"></xs:element>
+        </xs:sequence>
+    </xs:complexType>
+</xs:schema>

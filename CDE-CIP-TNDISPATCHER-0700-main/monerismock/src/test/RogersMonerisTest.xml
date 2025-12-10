@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<con:soapui-project id="6f55d8c8-9b4f-4526-8634-17c8fd70a081" activeEnvironment="Default" name="REST Project 1" soapui-version="5.3.0" xmlns:con="http://eviware.com/soapui/config"><con:settings/><con:interface xsi:type="con:RestService" id="0e318901-ce92-400a-b039-332dc3450a70" wadlVersion="http://wadl.dev..net/2009/02" name="http://localhost:7050" type="rest" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><con:settings/><con:definitionCache/><con:endpoints><con:endpoint>http://localhost:7050</con:endpoint></con:endpoints><con:resource name="Moneris" path="/moneris" id="7159ece1-fd40-4808-9f1c-d6d3a31e4072"><con:settings/><con:parameters/><con:method name="Tokenise1" id="f82e8982-d5d4-4132-8619-d5501888f6f1" method="POST"><con:settings/><con:parameters/><con:request name="Request 1" id="1d6fb1e8-6183-48a4-bf25-cd81cda12aaa" mediaType="application/json" postQueryString="false"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:endpoint>http://localhost:7050</con:endpoint><con:request><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<request>
+<store_id>rogers_poc</store_id>
+<api_token>4vNa8PxmvbjqbGid2nc5</api_token>
+<res_add_cc>
+<pan>5454545442424242</pan>
+<card_type>M</card_type>
+</res_add_cc>
+</request>]]></con:request><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:parameters/></con:request></con:method></con:resource></con:interface><con:properties/><con:wssContainer/><con:oAuth2ProfileContainer/><con:oAuth1ProfileContainer/></con:soapui-project>

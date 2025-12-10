@@ -1,0 +1,56 @@
+spring:
+  metrics:
+    export:
+      delay-millis: 6000
+      enabled: false
+  boot:
+    admin:
+      context-path: "api/applications"
+      url: http://localhost:${server.port}
+      client:
+        name: TN-Dispatcher
+        management-url: http://localhost:${server.port}
+
+server:
+  port: 7050
+  tomcat.max-connections: 10
+  compression:
+    enabled: true
+    mime-types: application/xml,text/html,text/xml,text/plain
+
+#security:
+#  user:
+#    name: foo
+#    password: bar
+
+#logging.file: "C:/Temp/smf/1/semafone-audit"
+logging.file: /tmp/tndispatcher-test.log
+
+semafone:
+  security:
+    enabled: false
+  vault:
+    provider: Moneris
+  http:
+    max.connections: 10
+    request.connection.timeout.millis: 100
+  https.certificate:
+    allowUntrusted: false
+    skipValidationFor:
+  endpoints:
+    moneris: http://localhost:7060/mock/mn
+
+util:
+  cybersource.xsd.schemas:
+    - schema/cybersource-2010-03-20.xsd
+    - schema/envelope.xsd
+  moneris.xsd.request.schemas:
+    - schema/mnRequest.xsd
+  moneris.xsd.response.schemas:
+    - schema/mnResponse.xsd
+
+#ssl:
+#  port: 8443
+#  key-store: "keystore.jks"
+#  key-store-password: secret
+#  key-password: password

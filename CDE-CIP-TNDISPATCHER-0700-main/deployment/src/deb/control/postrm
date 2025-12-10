@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if [ "$1" = "purge" ]; then
+
+ rm -rf /pkg/tndispatcher
+ 
+ rm -rf /var/run/tndispatcher
+
+fi

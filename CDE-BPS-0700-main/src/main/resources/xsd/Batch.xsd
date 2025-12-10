@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:sf="http://www.semafone.com"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://www.semafone.com/rogers/cde/cash"
+           xmlns="http://www.semafone.com/rogers/cde/cash"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+    <xs:import namespace="http://www.semafone.com" schemaLocation="Common.xsd"/>
+<!-- PUT a batch file. The HTTP request must be multipart/form-data so a file can be attached (ie have xml and a txt or zip file attachment) -->
+	<!-- As this schema is only for the XML it doesnt need to specify the file attachment  -->
+	<xs:element name="cashBatchPutFileRequest">
+	  <xs:complexType>
+	    <xs:sequence>
+		    <xs:element name="fileName"       type="xs:string"                  minOccurs="1" maxOccurs="1"></xs:element>
+            <xs:element name="fileProcessId"  type="xs:string"                  minOccurs="1" maxOccurs="1"></xs:element>
+            <xs:element name="formatId"       type="sf:FormatType"              minOccurs="0" maxOccurs="1"></xs:element>
+        </xs:sequence>
+      </xs:complexType>
+	</xs:element>
+	
+	<xs:element name="cashBatchPutFileResponse">
+	  <xs:complexType>
+	    <xs:sequence>		    
+			<xs:element name="result"              type="sf:ResultType"                 minOccurs="1" maxOccurs="1"></xs:element>
+			<xs:element name="traceId"             type="xs:string"                     minOccurs="1" maxOccurs="1"></xs:element>
+            <xs:element name="batchId"             type="xs:string"                     minOccurs="0" maxOccurs="1"></xs:element>
+			<xs:choice maxOccurs="1">
+                <xs:element name="info"                type="xs:string"                     minOccurs="0" maxOccurs="1"></xs:element>
+                <xs:element name="error"               type="sf:ErrorType"                  minOccurs="0" maxOccurs="1"></xs:element>
+            </xs:choice>
+    	</xs:sequence>	
+      </xs:complexType>	
+	</xs:element>
+
+	<!-- LIST batch files -->
+    <xs:element name="cashBatchListFilesRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="listFileNames" type="xs:boolean"     minOccurs="1" maxOccurs="1"></xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- A list of filenames -->
+    <xs:element name="cashBatchListFilesResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="result"        type="sf:ResultType"        minOccurs="1" maxOccurs="1"></xs:element>
+                <xs:element name="traceId"       type="xs:string"            minOccurs="1" maxOccurs="1"></xs:element>
+                <xs:choice minOccurs="0" maxOccurs="1">
+                    <xs:element name="fileNames"     type="sf:FileNameListType"  minOccurs="0" maxOccurs="1"></xs:element>
+                    <xs:element name="error"         type="sf:ErrorType"         minOccurs="0" maxOccurs="1"></xs:element>
+                </xs:choice>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- GET a processed batch file -->
+	<xs:element name="cashBatchGetFileRequest">
+	  <xs:complexType>
+	    <xs:sequence>			
+			<xs:element name="fileName"      type="xs:string"     minOccurs="0" maxOccurs="1"></xs:element>
+			<xs:element name="formatId"      type="sf:FormatType" minOccurs="0" maxOccurs="1"></xs:element>
+		</xs:sequence>
+      </xs:complexType>
+	</xs:element>
+	
+	<!-- Return a processed batch file as an attachment -->
+	<xs:element name="cashBatchGetFileResponse">
+	  <xs:complexType>
+	    <xs:sequence>		    
+			<xs:element name="result"        type="sf:ResultType"        minOccurs="1" maxOccurs="1"></xs:element>
+			<xs:element name="traceId"       type="xs:string"            minOccurs="1" maxOccurs="1"></xs:element>
+            <xs:choice minOccurs="0" maxOccurs="1">
+                <xs:element name="batchDownload" type="BatchDownloadType"    minOccurs="0" maxOccurs="1"></xs:element>
+                <xs:element name="error"         type="sf:ErrorType"         minOccurs="0" maxOccurs="1"></xs:element>
+            </xs:choice>
+    	</xs:sequence>
+      </xs:complexType>	
+	</xs:element>	
+	
+	<xs:complexType name="BatchDownloadType">
+    	<xs:sequence>
+    		<xs:element name="fileAttached" type="xs:string"     minOccurs="1" maxOccurs="1"></xs:element>
+			<xs:element name="formatId"     type="sf:FormatType" minOccurs="1" maxOccurs="1"></xs:element>
+			<xs:element name="fileType"     type="xs:string"     minOccurs="1" maxOccurs="1"></xs:element>
+    	</xs:sequence>
+    </xs:complexType>
+    </xs:schema>

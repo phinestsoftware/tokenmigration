@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+    <receipt>
+        <DataKey>9645531642234242</DataKey>
+        <ResponseCode>100</ResponseCode>
+        <ResponseFlag>ACCEPT</ResponseFlag>
+        <Message>SUCCESS</Message>
+        <CardType>M</CardType>
+    </receipt>
+    <receipt>
+        <DataKey>1234000012340000</DataKey>
+        <ResponseCode>100</ResponseCode>
+        <ResponseFlag>ACCEPT</ResponseFlag>
+        <Message>SUCCESS</Message>
+        <CardType>M</CardType>
+        <Pan>5454545442424242</Pan>
+    </receipt>
+    <receipt>
+        <DataKey>1234000012340000</DataKey>
+        <ResponseCode>100</ResponseCode>
+        <ResponseFlag>ACCEPT</ResponseFlag>
+        <Message>SUCCESS</Message>
+        <CardType>M</CardType>
+        <MaskedPan>545454</MaskedPan>
+    </receipt>
+    <receipt>
+        <DataKey>1234000012340000</DataKey>
+        <ResponseCode>100</ResponseCode>
+        <Message>SUCCESS</Message>
+        <CardType>M</CardType>
+        <ResponseFlag>ACCEPT</ResponseFlag>
+    </receipt>
+</response>

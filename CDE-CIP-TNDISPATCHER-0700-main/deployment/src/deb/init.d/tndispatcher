@@ -1,0 +1,43 @@
+#!/bin/sh
+#
+### BEGIN INIT INFO
+# Provides:          TN Dispatcher
+# Required-Start:    $local_fs $remote_fs $network
+# Required-Stop:     $local_fs $remote_fs $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: TN Dispatcher
+# Description:
+### END INIT INFO
+
+
+#define the script to use to start activemq
+TNSH="/pkg/tndispatcher/start_dispatcher.sh"
+PID_FILE="/var/run/tndispatcher/tndispatcher.pid"
+
+TN_CMD_START="su dpm $TNSH"
+TN_CMD_STOP="pkill -F $PID_FILE; rm $PID_FILE"
+
+create_pid_dir() {
+    if [ ! -d /var/run/tndispatcher ]; then
+        mkdir /var/run/tndispatcher
+        chmod 0755 /var/run/tndispatcher
+        chown dpm:dpm /var/run/tndispatcher
+    fi
+}
+
+case "$1" in
+start)
+    create_pid_dir
+    $TN_CMD_START
+    ;;
+stop)
+    eval $TN_CMD_STOP 
+    ;;
+restart)
+    $0 stop ; sleep 3;
+    $0 start
+    ;;
+*)
+    echo "usage: $0 (start|stop|restart)"
+esac

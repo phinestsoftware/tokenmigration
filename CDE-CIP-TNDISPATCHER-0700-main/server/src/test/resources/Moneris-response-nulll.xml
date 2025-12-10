@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+       <receipt>
+          <DataKey>null</DataKey>
+          <ResponseCode>106</ResponseCode>
+          <Message>UNKWNERROR</Message>
+          <CardType>null</CardType>
+          <ResponseFlag>REJECT</ResponseFlag>
+       </receipt>
+</response>

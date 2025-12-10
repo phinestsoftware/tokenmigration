@@ -1,0 +1,9 @@
+FROM .JFROG_MIRROR_REPO./ubi8/openjdk:11
+RUN microdnf install shadow-utils && microdnf clean all
+RUN groupadd -g 1001 appuser && \
+    useradd -r -u 1001 -g appuser appuser
+COPY /build/libs/*.jar /rogers/
+RUN chown -R appuser.appuser /rogers
+USER appuser
+EXPOSE 8080/tcp
+ENTRYPOINT java -Xmx2g -jar /rogers/.JAR_NAME.-0.0.1-SNAPSHOT.jar

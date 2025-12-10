@@ -1,0 +1,40 @@
+server:
+  port: 8083
+  logging:
+    level:
+      ROOT: INFO
+      org.springframework.web: INFO
+      com.rogers: INFO
+      io.micrometer: INFO
+azure:
+#  keyvault:
+#    enabled: false
+#    uri: ${keyvaulturi}
+#    client-id: ${keyvaultclientid}
+#    client-key: ${keyvaultclientkey}
+  application-insights:
+    enabled: true
+    logger:
+      level: info
+spring:
+  # Specify the DNS URI of your Redis cache.
+  redis:
+    host: mazcaenpecerec01.redis.cache.windows.net
+    # Specify the port for your Redis cache.
+    port: 6379
+    # Specify the access key for your Redis cache.
+    password: LfKrXXUccyE1h0ifCUWgZt93yrfPhcoiOYaGKgsKMhc=
+  data:
+    cassandra:
+      contact-points: mazcaenpececosdb01.cassandra.cosmos.azure.com
+      local-datacenter: Canada East
+      port: 10350
+      keyspace-name: ccedev01
+      ssl: true
+  jackson:
+    default-property-inclusion: NON_NULL
+build-number: ${ccebuildnumber}
+secret:
+  encryptionAlgo: AES/CBC/PKCS5PADDING
+  algorythm: AES
+  encoding: UTF-8

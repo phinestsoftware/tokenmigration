@@ -1,0 +1,541 @@
+openapi: 3.0.1
+info:
+  title: CCE-MS-CreditOptions
+  version: V1.0
+  description: Microservice to get latest business reference data (Credit Options)
+servers:
+  - url: 'https://dev01-cce-ms-creditoptions.ccenpe.app.rogers.com'
+    description: Dev Environment
+  - url: 'https://qa01-cce-ms-creditoptions.ccenpe.app.rogers.com'
+    description: QA Environment
+  - url: 'https://cce-ms-creditoptions.cceprda01.app.rogers.com'
+    description: ProdA Environment
+  - url: 'https://cce-ms-creditoptions.cceprdb01.app.rogers.com'
+    description: ProdB Environment
+paths:
+  '/status':
+    get:
+      tags:
+        - health-check-controller
+      summary: Health Check service
+      description: Health check to see if service is alive or not
+      operationId: healthCheckRoute
+      responses:
+        '200':
+          description: successful operation
+          content:
+            Application/Json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+            application/json: { }
+        '500':
+          description: Internal server error
+          content:
+            Application/Json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /V1/local_data/account/{accountAlias}/creditoptions:
+    get:
+      summary: Get latest business reference data (Credit Options)
+      tags:
+        - credit-options-controller
+      description: To get Credit Options for the given APIM subscription key
+      operationId: getCreditOptions
+      parameters:
+        - $ref: "#/components/parameters/accountAlias"
+        - $ref: "#/components/parameters/subscriptionKey"
+        - $ref: "#/components/parameters/riskClass"
+        - $ref: "#/components/parameters/creditOption"
+        - $ref: "#/components/parameters/applicationID"
+        - $ref: "#/components/parameters/totalDupCTN"
+        - $ref: "#/components/parameters/creditClass"
+        - $ref: "#/components/parameters/transactionID"
+      responses:
+        "200":
+          description: Credit options success response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditOptionsResponse"
+              examples:
+                response:
+                  value: |-
+                    {
+                      "service": "CCE-MS-CreditOptions",
+                      "operation": "GetCreditOptions",
+                       "errors":[
+                          {
+                             "errorCode":"000",
+                          }
+                       ],
+                       "content":{
+                          "rowCount":2,
+                          "transactionID":"20200926292208400",
+                          "creditOption":"BAG1",
+                          "riskClass":"IN71",
+                          "creditClass":"C",
+                          "maxDpPercent":76.50,
+                          "tieredIncrement": 100.50,
+                          "defaultTax":13.50,
+                          "creditOptions":[
+                             {
+                                "creditOption":"BAG1",
+                                "clmTag":"M",
+                                "creditOptionDefaultInd":"Y",
+                                "cla":200.00,
+                                "deposit":150.50,
+                                "eligConsolidationInd":"Y",
+                                "creditOptionDescription":"Corporate-Medium",
+                                "creditOptionDescriptionFrench":"Entreprise- Moyen",
+                                "byodDeposit":100.00,
+                                "lowTierDeposit":10.50,
+                                "mediumTierDeposit":100.20,
+                                "highTierDeposit":150.10,
+                                "lowTierHWInd":"Y",
+                                "mediumTierHWInd":"N",
+                                "highTierHWInd":"Y",
+                                "byodApprovedLineCount":10,
+                                "whpApprovedLineCount":3,
+                                "mobiApprovedLineCount":5,
+                                "tabletApprovedLineCount":4,
+                                "hardwareAmount":20.00,
+                                "financeEligibleInd":"Y",
+                                "retailMessage":"This customer is low risk due to minimal or no credit bureau history..",
+                                "retailMessageFrench":"Ce client présente un risque faible en raison d'antécédents de crédit insuffisants.",
+                                "creditOptionInfoE":"Medium risk customer. This customer can chose to activate the following 1) A device on a Premium Plus or Premium plan with a $150 deposit 2) A device on a Smart Tab plan with a $100 deposit 3) A device on a Talk and Text plan with a $50 deposit or 4) A device on a  No Tab plan with a $0 deposit. Please ensure the customer accepts the credit conditions.",
+                                "creditOptionInfoF":"Client à risque moyen. Le client peut choisir une des options suivantes : 1) Un appareil avec un forfait Le Standard ou Le Standard + avec un dépôt de 150 $ 2) Un appareil avec un forfait Le Futé avec un dépôt de 100 $ 3) Un appareil avec un forfait Appels et textos avec un dépôt de 50 $ 4) Un appareil avec un forfait Le Flex sans dépôt. Assurez-vous que le client accepte les conditions de crédit.",
+                                "rvEligibilityInd":"Y",
+                                "minDpPercent":18.50,
+                                "approvedCTNQTY":20,
+                                "totalApprovedCTN":5
+                             },
+                             {
+                                "creditOption":"AAC1",
+                                "clmTag":"O",
+                                "creditOptionDefaultInd":"N",
+                                "cla":200.00,
+                                "deposit":150.50,
+                                "eligConsolidationInd":"Y",
+                                "creditOptionDescription":"Corporate-Medium",
+                                "creditOptionDescriptionFrench":"Entreprise- Moyen",
+                                "byodDeposit":100.00,
+                                "lowTierDeposit":10.50,
+                                "mediumTierDeposit":100.20,
+                                "highTierDeposit":150.10,
+                                "lowTierHWInd":"Y",
+                                "mediumTierHWInd":"N",
+                                "highTierHWInd":"Y",
+                                "byodApprovedLineCount":5,
+                                "whpApprovedLineCount":4,
+                                "mobiApprovedLineCount":3,
+                                "tabletApprovedLineCount":2,
+                                "hardwareAmount":20.00,
+                                "financeEligibleInd":"Y",
+                                "retailMessage":"This customer is low risk due to minimal or no credit bureau history..",
+                                "retailMessageFrench":"Ce client présente un risque faible en raison d'antécédents de crédit insuffisants.",
+                                "creditOptionInfoE":"Medium risk customer. This customer can chose to activate the following 1) A device on a Premium Plus or Premium plan with a $150 deposit 2) A device on a Smart Tab plan with a $100 deposit 3) A device on a Talk and Text plan with a $50 deposit or 4) A device on a  No Tab plan with a $0 deposit. Please ensure the customer accepts the credit conditions.",
+                                "creditOptionInfoF":"Client à risque moyen. Le client peut choisir une des options suivantes : 1) Un appareil avec un forfait Le Standard ou Le Standard + avec un dépôt de 150 $ 2) Un appareil avec un forfait Le Futé avec un dépôt de 100 $ 3) Un appareil avec un forfait Appels et textos avec un dépôt de 50 $ 4) Un appareil avec un forfait Le Flex sans dépôt. Assurez-vous que le client accepte les conditions de crédit.",
+                                "rvEligibilityInd":"Y",
+                                "minDpPercent":18.50,
+                                "approvedCTNQTY":20,
+                                "totalApprovedCTN":5
+                             }
+                          ]
+                       }
+                    }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                response:
+                  value: |-
+                    {
+                           "errors": [
+                               {
+                                       "errorCode": "BAD_REQUEST",
+                                       "errorMessage": "accountAlias not valid"
+                               }
+                           ],
+                           "service": "CCE-MS-CreditOptions",
+                           "operation": "GetCreditOptions"
+                    }
+        '422':
+          description: Business Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                Business error:
+                  value: |-
+                    {
+                            "errors": [
+                                {
+                                        "errorCode": "005",
+                                        "errorMessage": "Invalid AccountNumber <AccountNumber>"
+                                }
+                            ],
+                            "service": "CCE-MS-CreditOptions",
+                            "operation": "GetCreditOptions"
+                     }
+        '401':
+          description: Unauthorized User
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedErrorResponse'
+              examples:
+                Invalid Subscription Key:
+                  value: |-
+                    {
+                      "statusCode": 401,
+                      "message" : "Access denied due to invalid subscription key"
+                    }
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                Internal Server Error:
+                  value: |-
+                    {
+                            "errors": [
+                                {
+                                        "errorCode": "TECH ERROR",
+                                        "errorMessage": "Something went wrong"
+                                }
+                            ],
+                            "service": "CCE-MS-CreditOptions",
+                            "operation": "GetCreditOptions"
+                     }
+components:
+  parameters:
+    accountAlias:
+      name: accountAlias
+      in: path
+      description: encrypted account number
+      required: true
+      schema:
+        type: string
+    subscriptionKey:
+      name: CCE-API-Subscription-key
+      description: APIM subscription key
+      required: true
+      in: header
+      example: "12345678"
+      schema:
+        type: string
+    riskClass:
+      name: riskClass
+      description: Credit Node
+      required: true
+      in: query
+      example: IN71
+      schema:
+        type: string
+    creditOption:
+      name: creditOption
+      description: Credit Option
+      required: true
+      in: query
+      example: BAG1
+      schema:
+        type: string
+    applicationID:
+      name: applicationID
+      description: Unique App Identifier
+      required: true
+      in: query
+      example: CSM
+      schema:
+        type: string
+    totalDupCTN:
+      name: totalDupCTN
+      description: Total Dup CTNs
+      required: true
+      in: query
+      example: 2
+      schema:
+        type: integer
+    creditClass:
+      name: creditClass
+      description: Credit Class
+      required: false
+      in: query
+      example: H
+      schema:
+        type: string
+    transactionID:
+      name: transactionID
+      description: Application Defined transaction identifier
+      required: false
+      in: query
+      example: "20200526192208473"
+      schema:
+        type: string
+  schemas:
+    HealthCheckResponse:
+      type: object
+      properties:
+        service:
+          type: string
+          description: service name
+          example: cce-ms-creditoptions
+        artifactBuildVersion:
+          type: string
+          description: The build ID that was deployed
+          example: 1.0.512
+        buildTime:
+          type: string
+          description: Time the deployed artifact was built
+          example: 2020-10-08, 4:50 p.m.
+        applicationStartTime:
+          type: string
+          description: Application started time
+          example: 2020-10-07, 1:36 p.m.
+        alivePeriod:
+          type: string
+          description: Application Up time in days, hours and minutes
+          example: 0.1.14.(D.H.M)
+    UnauthorizedErrorResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 401
+        message:
+          type: string
+          example: Access Denied
+    ErrorResponse:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              errorCode:
+                type: string
+                description: errorCode
+                example: "005"
+              errorMessage:
+                type: string
+                description: errorMessage
+                example: "Invalid AccountNumber 123456"
+            required:
+              - errorCode
+              - errorMessage
+        service:
+          type: string
+          description: service
+          example: CCE-MS-CreditOptions
+        operation:
+          type: string
+          description: operation
+          example: GetCreditOptions
+    CreditOptionsResponse:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              errorCode:
+                type: string
+                description: errorCode
+                example: "000"
+              errorMessage:
+                type: string
+                description: errorMessage
+                example: ""
+            required:
+              - errorCode
+        content:
+          type: object
+          properties:
+            rowCount:
+              type: integer
+              description: No of rows returned
+              example: 3
+            transactionID:
+              type: string
+              description: Application Defined transaction identifier
+              example: "20200926292208400"
+            creditOption:
+              type: string
+              description: Credit option
+              example: BAG1
+            riskClass:
+              type: string
+              description: Credit Node
+              example: IN71
+            creditClass:
+              type: string
+              description: Credit class
+              example: H
+            maxDpPercent:
+              type: number
+              description: Max down payment percentage
+              example: 76.55
+            tieredIncrement:
+              type: number
+              description: tired increment
+              example: 100.55
+            service:
+              type: string
+              description: service name
+              example: CCE-MS-CreditOptions
+            operation:
+              type: string
+              description: operation name
+              example: GetCreditOptions
+            defaultTax:
+              type: number
+              description: default tax
+              example: 13.55
+            creditOptions:
+              type: array
+              description: credit options
+              items:
+                type: object
+                properties:
+                  creditOption:
+                    type: string
+                    description: credit option
+                    example: BAG1
+                  clmTag:
+                    type: string
+                    description: CLM tag
+                    example: M O S V NULL
+                  creditOptionDefaultInd:
+                    type: string
+                    description: credit option default indicator
+                    example: Y/N
+                  cla:
+                    type: number
+                    description: CLA
+                    example: 200.55
+                  deposit:
+                    type: number
+                    description: Deposit Amount
+                    example: 150.55
+                  eligConsolidationInd:
+                    type: string
+                    description: Eligibility to consoldiate
+                    example: Y/N
+                  creditOptionDescription:
+                    type: string
+                    description: credit option information english
+                    example: Corporate- Medium
+                  creditOptionDescriptionFrench:
+                    type: string
+                    description: credit option information french
+                    example: Entreprise- Moyen
+                  byodDeposit:
+                    type: number
+                    description: BYOD deposit
+                    example: 100.55
+                  lowTierDeposit:
+                    type: number
+                    description: low tier deposit
+                    example: 10.55
+                  mediumTierDeposit:
+                    type: number
+                    description: medium tier deposit
+                    example: 100.25
+                  highTierDeposit:
+                    type: number
+                    description: high tier deposit
+                    example: 150.15
+                  lowTierHWInd:
+                    type: string
+                    description: low tier hardware indicator
+                    example: Y/N
+                  mediumTierHWInd:
+                    type: string
+                    description: Medium tier hardware indicator
+                    example: Y/N
+                  highTierHWInd:
+                    type: string
+                    description: High tier hardware indicator
+                    example: Y/N
+                  byodApprovedLineCount:
+                    type: integer
+                    description: total number BYOD approved lines
+                    example: 10
+                  whpApprovedLineCount:
+                    type: integer
+                    description: total number WHP approved lines
+                    example: 3
+                  mobiApprovedLineCount:
+                    type: integer
+                    description: total number MOBI approved lines
+                    example: 5
+                  tabletApprovedLineCount:
+                    type: integer
+                    description: total number of tablet approved lines
+                    example: 4
+                  hardwareAmount:
+                    type: number
+                    description: hardware amount
+                    example: 20.55
+                  financeEligibleInd:
+                    type: string
+                    description: Finance eligibility indicator
+                    example: Y/N
+                  retailMessage:
+                    type: string
+                    description: Retail message English
+                    example: This customer is low risk due to minimal or no credit
+                      bureau history.
+                  retailMessageFrench:
+                    type: string
+                    description: Retail message French
+                    example: Ce client présente un risque faible en raison
+                      d'antécédents de crédit insuffisants.
+                  creditOptionInfoE:
+                    type: string
+                    description: Option Info English
+                    example: Medium risk customer. This customer can chose to activate
+                      the following 1) A device on a Premium Plus or Premium
+                      plan with a $150 deposit 2) A device on a Smart Tab plan
+                      with a $100 deposit 3) A device on a Talk and Text plan
+                      with a $50 deposit or 4) A device on a  No Tab plan with a
+                      $0 deposit. Please ensure the customer accepts the credit
+                      conditions.
+                  creditOptionInfoF:
+                    type: string
+                    description: Option info French
+                    example: Client à risque moyen. Le client peut choisir une des
+                      options suivantes :\ 1) Un appareil avec un forfait Le
+                      Standard ou Le Standard + avec un dépôt de 150 $ 2) Un
+                      appareil avec un forfait Le Futé avec un dépôt de 100 $ 3)
+                      Un appareil avec un forfait Appels et textos avec un dépôt
+                      de 50 $ 4) Un appareil avec un forfait Le Flex sans dépôt.
+                      Assurez-vous que le client accepte les conditions de
+                      crédit.
+                  rvEligibilityInd:
+                    type: string
+                    description: RV eligibility indicator
+                    example: Y/N
+                  minDpPercent:
+                    type: number
+                    description: Min down payment percentage
+                    example: 18.55
+                  approvedCTNQTY:
+                    type: integer
+                    description: approved CTNQTY
+                    example: 20
+                  creditOptionExpiryDate:
+                    type: string
+                    description: credit option expiry date
+                  totalApprovedCTN:
+                    type: integer
+                    description: total number of available new lines that can be activated
+                    example: 5
