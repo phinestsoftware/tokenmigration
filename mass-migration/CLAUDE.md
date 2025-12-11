@@ -156,4 +156,44 @@ Format: `{TRANSACTION_COUNT},{TIMESTAMP}` (e.g., `0000001033,20251208141500`)
 - Storage: `sttokenmigoqt29j`
 - SQL Server: `sql-tokenmigration-dev-oqt29j`
 - SQL Database: `sqldb-tokenmigration-dev`
-- App Insights: `appi-tokenmigration-dev`
+- App Insights: `appi-tokenmigration-dev-oqt29j`
+
+## Testing Scripts
+
+### IMPORTANT: Blob Trigger Path Requirements
+The `uploadFileBilling` blob trigger expects files in path: `billing-input/{source}/{name}`
+- Files MUST be in a subfolder (e.g., `billing-input/V21/filename.csv`)
+- Files at root level (`billing-input/filename.csv`) will NOT trigger the function
+
+### Upload Test File
+Use the upload script to avoid common mistakes (permissions, wrong paths):
+```bash
+# Generate and upload a test file with random token prefix
+./scripts/upload-test-file.sh
+
+# Generate with specific token prefix (e.g., 9750)
+./scripts/upload-test-file.sh --generate 9750
+
+# Upload an existing file
+./scripts/upload-test-file.sh /path/to/myfile.csv
+```
+
+The script:
+- Gets connection string from Function App (avoids permission errors)
+- Uploads to correct path with source folder (`billing-input/V21/...`)
+- Shows the token prefix to search for in verification
+
+### Verify Migration Results
+```bash
+# Check results by token prefix
+node scripts/verify-migration.js 9750
+
+# Check results by FILE_ID
+node scripts/verify-migration.js FILE_1234567890
+```
+
+### Common Testing Mistakes to Avoid
+1. **Wrong upload path** - Always use `billing-input/{source}/filename` not `billing-input/filename`
+2. **Permission errors with `--auth-mode login`** - Use connection string instead (the script handles this)
+3. **Old code running after deploy** - Run `az functionapp restart` after deploying
+4. **Blob trigger not firing** - Check if file was already processed (blob receipts). Use unique filenames.

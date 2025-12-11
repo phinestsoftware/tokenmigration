@@ -43,18 +43,20 @@ async function uploadFileHandler(
   try {
     // Parse blob path to determine context
     const pathParts = blobPath.split('/');
-    const container = pathParts[0];
     const fileName = pathParts[pathParts.length - 1];
 
-    // Determine context (Moneris input or Mastercard response)
-    const isMastercardResponse = container === 'mastercard-mapping' || blobPath.includes('mastercard/mapping');
+    // Determine context based on function name (more reliable than path parsing)
+    // uploadFileMastercard handles MC responses, uploadFileBilling handles billing input
+    const isMastercardResponse = context.functionName === 'uploadFileMastercard' ||
+                                  fileName.includes('.mc.response') ||
+                                  blobPath.includes('mastercard');
     const contextType = isMastercardResponse ? 'PG' : 'MONERIS';
 
     // Generate file ID
     const fileId = generateFileId(fileName);
     const fileLogger = logger.withFileId(fileId);
 
-    fileLogger.info('Processing file', { fileName, contextType, container });
+    fileLogger.info('Processing file', { fileName, contextType, blobPath });
 
     // Parse file metadata
     const parsedFileName = parseFileName(fileName);

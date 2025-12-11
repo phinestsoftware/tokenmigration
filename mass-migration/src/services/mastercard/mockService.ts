@@ -1,6 +1,6 @@
 import { Config, getConfig } from '../../config/index.js';
 import { uploadBlob } from '../blobStorage.js';
-import { executeQuery, bulkInsert, SqlTypes } from '../database.js';
+import { executeQuery } from '../database.js';
 import { Logger, createLogger } from '../../utils/logger.js';
 import { generateCsv } from '../../utils/fileParser.js';
 import { PgTokenCsvColumns, toPgTokenStaging } from '../../models/pgToken.js';
@@ -268,26 +268,16 @@ function generateMockResponseFile(responses: MockMcResponse[]): string {
 
 /**
  * Insert mock responses directly to PG_TOKENS_STAGING
+ * Note: Uses parameterized INSERT instead of bulkInsert due to BCP identity column issues
  */
 async function insertMockResponsesToStaging(
   fileId: string,
   responses: MockMcResponse[]
 ): Promise<void> {
-  const columns = [
-    { name: 'FILE_ID', type: SqlTypes.varchar(50) },
-    { name: 'MONERIS_TOKEN', type: SqlTypes.varchar(16) },
-    { name: 'PG_TOKEN', type: SqlTypes.varchar(16) },
-    { name: 'CARD_NUMBER_MASKED', type: SqlTypes.varchar(20) },
-    { name: 'CARD_BRAND', type: SqlTypes.varchar(20) },
-    { name: 'FIRST_SIX', type: SqlTypes.varchar(6) },
-    { name: 'LAST_FOUR', type: SqlTypes.varchar(4) },
-    { name: 'FUNDING_METHOD', type: SqlTypes.varchar(20) },
-    { name: 'EXP_DATE', type: SqlTypes.varchar(4) },
-    { name: 'RESULT', type: SqlTypes.varchar(20) },
-    { name: 'ERROR_CAUSE', type: SqlTypes.varchar(50) },
-    { name: 'ERROR_EXPLANATION', type: SqlTypes.varchar(255) },
-    { name: 'MIGRATION_STATUS', type: SqlTypes.varchar(20) },
-  ];
+  if (responses.length === 0) {
+    logger.info('No responses to insert to staging');
+    return;
+  }
 
   const rows = responses.map((r) => {
     const maskedNumber = r['sourceOfFunds.provided.card.number'];
@@ -323,7 +313,34 @@ async function insertMockResponsesToStaging(
     };
   });
 
-  await bulkInsert('PG_TOKENS_STAGING', columns, rows);
+  // Use parameterized INSERT instead of bulkInsert (BCP has issues with identity columns)
+  for (const row of rows) {
+    await executeQuery(
+      `INSERT INTO PG_TOKENS_STAGING
+        (FILE_ID, MONERIS_TOKEN, PG_TOKEN, CARD_NUMBER_MASKED, CARD_BRAND, FIRST_SIX, LAST_FOUR,
+         FUNDING_METHOD, EXP_DATE, RESULT, ERROR_CAUSE, ERROR_EXPLANATION, MIGRATION_STATUS)
+       VALUES
+        (@fileId, @monerisToken, @pgToken, @cardNumberMasked, @cardBrand, @firstSix, @lastFour,
+         @fundingMethod, @expDate, @result, @errorCause, @errorExplanation, @migrationStatus)`,
+      {
+        fileId: row.FILE_ID,
+        monerisToken: row.MONERIS_TOKEN,
+        pgToken: row.PG_TOKEN,
+        cardNumberMasked: row.CARD_NUMBER_MASKED,
+        cardBrand: row.CARD_BRAND,
+        firstSix: row.FIRST_SIX,
+        lastFour: row.LAST_FOUR,
+        fundingMethod: row.FUNDING_METHOD,
+        expDate: row.EXP_DATE,
+        result: row.RESULT,
+        errorCause: row.ERROR_CAUSE,
+        errorExplanation: row.ERROR_EXPLANATION,
+        migrationStatus: row.MIGRATION_STATUS,
+      }
+    );
+  }
+
+  logger.info(`Inserted ${rows.length} records to PG_TOKENS_STAGING`, { fileId });
 }
 
 /**
