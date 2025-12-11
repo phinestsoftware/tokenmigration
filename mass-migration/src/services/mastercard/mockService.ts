@@ -1,9 +1,7 @@
-import { Config, getConfig } from '../../config/index.js';
+import { Config } from '../../config/index.js';
 import { uploadBlob } from '../blobStorage.js';
-import { executeQuery } from '../database.js';
 import { Logger, createLogger } from '../../utils/logger.js';
 import { generateCsv } from '../../utils/fileParser.js';
-import { PgTokenCsvColumns, toPgTokenStaging } from '../../models/pgToken.js';
 import { parseFileName } from '../../models/migrationBatch.js';
 
 const logger: Logger = createLogger('MockMastercardService');
@@ -82,10 +80,9 @@ export async function triggerMockMastercardResponse(
 
   logger.info('Mock MC response file uploaded', { fileName: responseFileName });
 
-  // Option 2: Directly insert to PG_TOKENS_STAGING (faster for testing)
-  await insertMockResponsesToStaging(fileId, responses);
-
-  logger.info('Mock responses inserted to staging');
+  // The blob trigger (uploadFileMastercard) will pick up this file
+  // and process it through the normal flow, inserting to PG_TOKENS_STAGING
+  logger.info('Mock MC response will be processed by uploadFileMastercard blob trigger');
 }
 
 /**
@@ -264,83 +261,6 @@ function generateMockResponseFile(responses: MockMcResponse[]): string {
   ];
 
   return generateCsv(responses as unknown as Record<string, unknown>[], columns, { includeHeader: true });
-}
-
-/**
- * Insert mock responses directly to PG_TOKENS_STAGING
- * Note: Uses parameterized INSERT instead of bulkInsert due to BCP identity column issues
- */
-async function insertMockResponsesToStaging(
-  fileId: string,
-  responses: MockMcResponse[]
-): Promise<void> {
-  if (responses.length === 0) {
-    logger.info('No responses to insert to staging');
-    return;
-  }
-
-  const rows = responses.map((r) => {
-    const maskedNumber = r['sourceOfFunds.provided.card.number'];
-    let firstSix = '';
-    let lastFour = '';
-
-    if (maskedNumber && maskedNumber.length >= 10) {
-      firstSix = maskedNumber.substring(0, 6);
-      lastFour = maskedNumber.slice(-4);
-    }
-
-    // Map scheme to single character
-    let cardBrand = '';
-    const scheme = r['sourceOfFunds.provided.card.scheme'];
-    if (scheme === 'VISA') cardBrand = 'V';
-    else if (scheme === 'MASTERCARD') cardBrand = 'M';
-    else if (scheme === 'AMEX') cardBrand = 'A';
-
-    return {
-      FILE_ID: fileId,
-      MONERIS_TOKEN: r.correlationId,
-      PG_TOKEN: r.token || null,
-      CARD_NUMBER_MASKED: maskedNumber || null,
-      CARD_BRAND: cardBrand || null,
-      FIRST_SIX: firstSix || null,
-      LAST_FOUR: lastFour || null,
-      FUNDING_METHOD: r['sourceOfFunds.provided.card.fundingMethod'] || null,
-      EXP_DATE: r['sourceOfFunds.provided.card.expiry'] || null,
-      RESULT: r.result,
-      ERROR_CAUSE: r['error.cause'] || null,
-      ERROR_EXPLANATION: r['error.explanation'] || null,
-      MIGRATION_STATUS: r.result === 'SUCCESS' ? 'PENDING' : 'FAILED',
-    };
-  });
-
-  // Use parameterized INSERT instead of bulkInsert (BCP has issues with identity columns)
-  for (const row of rows) {
-    await executeQuery(
-      `INSERT INTO PG_TOKENS_STAGING
-        (FILE_ID, MONERIS_TOKEN, PG_TOKEN, CARD_NUMBER_MASKED, CARD_BRAND, FIRST_SIX, LAST_FOUR,
-         FUNDING_METHOD, EXP_DATE, RESULT, ERROR_CAUSE, ERROR_EXPLANATION, MIGRATION_STATUS)
-       VALUES
-        (@fileId, @monerisToken, @pgToken, @cardNumberMasked, @cardBrand, @firstSix, @lastFour,
-         @fundingMethod, @expDate, @result, @errorCause, @errorExplanation, @migrationStatus)`,
-      {
-        fileId: row.FILE_ID,
-        monerisToken: row.MONERIS_TOKEN,
-        pgToken: row.PG_TOKEN,
-        cardNumberMasked: row.CARD_NUMBER_MASKED,
-        cardBrand: row.CARD_BRAND,
-        firstSix: row.FIRST_SIX,
-        lastFour: row.LAST_FOUR,
-        fundingMethod: row.FUNDING_METHOD,
-        expDate: row.EXP_DATE,
-        result: row.RESULT,
-        errorCause: row.ERROR_CAUSE,
-        errorExplanation: row.ERROR_EXPLANATION,
-        migrationStatus: row.MIGRATION_STATUS,
-      }
-    );
-  }
-
-  logger.info(`Inserted ${rows.length} records to PG_TOKENS_STAGING`, { fileId });
 }
 
 /**

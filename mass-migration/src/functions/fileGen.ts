@@ -106,6 +106,33 @@ async function fileGenHandler(
     if (config.MOCK_MASTERCARD_ENABLED) {
       logger.info('Mock mode enabled, generating mock MC response');
       await triggerMockMastercardResponse(fileId, uniqueTokens, sourceId, config);
+
+      // Wait for the blob trigger to process the MC response file
+      // This ensures PG tokens are in staging before batchWorker runs
+      logger.info('Waiting for MC response blob trigger to process...');
+      const maxWaitMs = 30000; // 30 seconds max
+      const pollIntervalMs = 2000; // Check every 2 seconds
+      let waited = 0;
+
+      while (waited < maxWaitMs) {
+        const pgCount = await executeQuery<{ count: number }>(
+          `SELECT COUNT(*) as count FROM PG_TOKENS_STAGING WHERE FILE_ID = @fileId`,
+          { fileId }
+        );
+
+        if ((pgCount.recordset[0]?.count ?? 0) >= uniqueTokens.length) {
+          logger.info('PG tokens ready in staging', { count: pgCount.recordset[0]?.count });
+          break;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+        waited += pollIntervalMs;
+        logger.info('Still waiting for PG tokens...', { waited, expected: uniqueTokens.length });
+      }
+
+      if (waited >= maxWaitMs) {
+        logger.warn('Timeout waiting for PG tokens - proceeding anyway');
+      }
     }
 
     // Get total batches from batch record

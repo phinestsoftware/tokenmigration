@@ -52,22 +52,28 @@ async function uploadFileHandler(
                                   blobPath.includes('mastercard');
     const contextType = isMastercardResponse ? 'PG' : 'MONERIS';
 
-    // Generate file ID
+    // Read and decode blob content
+    const content = blobBuffer.toString('utf-8');
+
+    // Handle MC response files differently - they update existing batches
+    if (isMastercardResponse) {
+      await handleMastercardResponse(fileName, content, logger);
+      return;
+    }
+
+    // Generate file ID for billing input files
     const fileId = generateFileId(fileName);
     const fileLogger = logger.withFileId(fileId);
 
-    fileLogger.info('Processing file', { fileName, contextType, blobPath });
+    fileLogger.info('Processing billing file', { fileName, contextType, blobPath });
 
     // Parse file metadata
     const parsedFileName = parseFileName(fileName);
     const sourceId = parsedFileName?.sourceId ?? 'UNKNOWN';
     const tokenType = parsedFileName?.tokenType ?? 'P';
 
-    // Read and decode blob content
-    const content = blobBuffer.toString('utf-8');
-
     // Validate file structure
-    const expectedColumns = isMastercardResponse ? PgTokenCsvColumns : MonerisTokenCsvColumns;
+    const expectedColumns = MonerisTokenCsvColumns;
     const validation = validateFileStructure(content, expectedColumns);
 
     if (!validation.isValid) {
@@ -91,11 +97,7 @@ async function uploadFileHandler(
       `File received: ${fileName}`, { recordCount, sourceId, tokenType });
 
     // Load records to staging table
-    if (isMastercardResponse) {
-      await loadPgTokensToStaging(parseResult.records, fileId, fileLogger);
-    } else {
-      await loadMonerisTokensToStaging(parseResult.records, fileId, fileLogger);
-    }
+    await loadMonerisTokensToStaging(parseResult.records, fileId, fileLogger);
 
     // Update batch record with load status
     await updateBatchStatus(fileId, 'PROCESSING', recordCount);
@@ -233,6 +235,95 @@ async function loadPgTokensToStaging(
 
   const insertedCount = await bulkInsert('PG_TOKENS_STAGING', columns, rows);
   logger.info('PG tokens loaded to staging', { insertedCount });
+}
+
+/**
+ * Handle Mastercard response file processing
+ * Parses the MC response CSV and inserts PG tokens to staging
+ */
+async function handleMastercardResponse(
+  fileName: string,
+  content: string,
+  logger: Logger
+): Promise<void> {
+  // Extract file ID from filename: FILE_xxxx.mc.response or SOURCE.TYPE.DATE.SEQ.mc.response
+  let fileId: string = '';
+  if (fileName.startsWith('FILE_')) {
+    // Format: FILE_1234567890.mc.response
+    fileId = fileName.replace('.mc.response', '');
+  } else {
+    // Format: V21.P.20251208.0001.mc.response -> need to match to existing batch
+    const parsedName = parseFileName(fileName.replace('.mc.response', ''));
+    if (parsedName) {
+      // Look up the batch by matching source/type/date pattern
+      const result = await executeQuery(
+        `SELECT TOP 1 FILE_ID FROM TOKEN_MIGRATION_BATCH
+         WHERE SOURCE_ID = @sourceId AND TOKEN_TYPE = @tokenType
+         ORDER BY CREATED_AT DESC`,
+        { sourceId: parsedName.sourceId, tokenType: parsedName.tokenType }
+      );
+      const firstRow = result.recordset[0] as { FILE_ID?: string } | undefined;
+      if (firstRow?.FILE_ID) {
+        fileId = firstRow.FILE_ID;
+      }
+    }
+    // Fallback: generate from filename
+    if (!fileId) {
+      fileId = 'FILE_' + Date.now();
+    }
+  }
+
+  const fileLogger = logger.withFileId(fileId);
+  fileLogger.info('Processing MC response file', { fileName, fileId });
+
+  // Parse CSV content
+  const parseResult = parseCsv<Record<string, string>>(content);
+  const recordCount = parseResult.records.length;
+
+  fileLogger.info('MC response parsed', { recordCount });
+
+  // Insert audit log
+  await insertAuditLog(fileId, null, 'MC_RESP_RECV',
+    `Mastercard response received: ${fileName}`, { recordCount });
+
+  // Insert PG tokens to staging using parameterized INSERT (avoid bulkInsert issues)
+  let insertedCount = 0;
+  for (const row of parseResult.records) {
+    const record = mapCsvRowToPgToken(row);
+    const staging = toPgTokenStaging(record, fileId);
+
+    await executeQuery(`
+      INSERT INTO PG_TOKENS_STAGING
+      (FILE_ID, MONERIS_TOKEN, PG_TOKEN, CARD_NUMBER_MASKED, CARD_BRAND, FIRST_SIX, LAST_FOUR,
+       FUNDING_METHOD, EXP_DATE, EXP_MONTH, EXP_YEAR, RESULT, ERROR_CAUSE, ERROR_EXPLANATION, MIGRATION_STATUS)
+      VALUES
+      (@fileId, @monerisToken, @pgToken, @cardNumberMasked, @cardBrand, @firstSix, @lastFour,
+       @fundingMethod, @expDate, @expMonth, @expYear, @result, @errorCause, @errorExplanation, @migrationStatus)
+    `, {
+      fileId: staging.fileId,
+      monerisToken: staging.monerisToken,
+      pgToken: staging.pgToken,
+      cardNumberMasked: staging.cardNumberMasked,
+      cardBrand: staging.cardBrand,
+      firstSix: staging.firstSix,
+      lastFour: staging.lastFour,
+      fundingMethod: staging.fundingMethod,
+      expDate: staging.expDate,
+      expMonth: staging.expMonth,
+      expYear: staging.expYear,
+      result: staging.result,
+      errorCause: staging.errorCause,
+      errorExplanation: staging.errorExplanation,
+      migrationStatus: staging.migrationStatus,
+    });
+    insertedCount++;
+  }
+
+  fileLogger.info('PG tokens loaded to staging', { insertedCount });
+
+  // Insert audit log for successful load
+  await insertAuditLog(fileId, null, 'MC_RESP_LOAD',
+    `Mastercard response loaded: ${insertedCount} tokens`, { insertedCount });
 }
 
 /**
