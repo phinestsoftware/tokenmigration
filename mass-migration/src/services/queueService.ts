@@ -113,9 +113,21 @@ export async function sendMessageWithDelay<T>(
   return response.messageId;
 }
 
-export function decodeQueueMessage<T>(messageText: string): T {
-  const decoded = Buffer.from(messageText, 'base64').toString('utf-8');
-  return JSON.parse(decoded) as T;
+export function decodeQueueMessage<T>(messageText: string | object): T {
+  // Azure Functions v4 may auto-decode the base64 message
+  // If it's already an object, return it directly
+  if (typeof messageText === 'object') {
+    return messageText as T;
+  }
+
+  // Try to decode as base64 first
+  try {
+    const decoded = Buffer.from(messageText, 'base64').toString('utf-8');
+    return JSON.parse(decoded) as T;
+  } catch {
+    // If base64 decode fails, try parsing as JSON directly
+    return JSON.parse(messageText) as T;
+  }
 }
 
 export async function getQueueLength(queueName: string): Promise<number> {

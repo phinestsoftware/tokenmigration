@@ -34,6 +34,14 @@ az monitor app-insights query \
   --analytics-query "traces | where message contains 'Failed' | order by timestamp desc | take 10" --output json
 ```
 
+## Important: Keep Azure & Terraform in Sync!
+**EVERY TIME** you change settings in Azure via CLI (az commands), you **MUST** also update the corresponding Terraform files. Otherwise, the next `terraform apply` will revert your changes!
+
+Examples:
+- Changed Node version? Update `infra/modules/function-app/main.tf` → `node_version`
+- Added app settings? Update `app_settings` block in Terraform
+- Changed SKU? Update Terraform
+
 ## Common Issues and Fixes
 
 ### Issue 1: "crypto is not defined" Error
