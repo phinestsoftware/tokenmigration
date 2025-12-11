@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getConfig } from '../config/index.js';
 import { createLogger, Logger } from '../utils/logger.js';
 import { downloadBlob } from '../services/blobStorage.js';
-import { executeQuery, bulkInsert, SqlTypes } from '../services/database.js';
+import { executeQuery, bulkInsert, SqlTypes, getConnection } from '../services/database.js';
 import { queueValidateTokens, ValidateTokensMessage } from '../services/queueService.js';
 import { sendMigrationStartEmail } from '../services/emailService.js';
 import { parseCsv, validateFileStructure } from '../utils/fileParser.js';
@@ -142,50 +142,41 @@ async function loadMonerisTokensToStaging(
     return toMonerisTokenStaging(record, fileId);
   });
 
-  // Column list must match table definition order (skip IDENTITY column ID)
-  const columns = [
-    { name: 'FILE_ID', type: SqlTypes.varchar(50) },
-    { name: 'BATCH_ID', type: SqlTypes.varchar(50) },
-    { name: 'MONERIS_TOKEN', type: SqlTypes.varchar(16) },
-    { name: 'EXP_DATE', type: SqlTypes.varchar(4) },
-    { name: 'ENTITY_ID', type: SqlTypes.varchar(36) },
-    { name: 'ENTITY_TYPE', type: SqlTypes.char(1) },
-    { name: 'ENTITY_STS', type: SqlTypes.char(1) },
-    { name: 'CREATION_DATE', type: SqlTypes.date },
-    { name: 'LAST_USE_DATE', type: SqlTypes.date },
-    { name: 'TRX_SEQ_NO', type: SqlTypes.varchar(36) },
-    { name: 'BUSINESS_UNIT', type: SqlTypes.varchar(20) },
-    { name: 'VALIDATION_STATUS', type: SqlTypes.varchar(20) },
-    { name: 'MIGRATION_STATUS', type: SqlTypes.varchar(20) },
-    { name: 'ERROR_CODE', type: SqlTypes.varchar(20) },
-    { name: 'PMR', type: SqlTypes.varchar(16) },
-    { name: 'CREATED_AT', type: SqlTypes.datetime2 },
-    { name: 'UPDATED_AT', type: SqlTypes.datetime2 },
-    { name: 'UPDATED_BY', type: SqlTypes.varchar(50) },
-  ];
+  // Use parameterized INSERT instead of bulk insert to avoid BCP column type issues
+  const connection = await getConnection();
+  let insertedCount = 0;
 
-  const rows = tokens.map((t) => ({
-    FILE_ID: t.fileId,
-    BATCH_ID: t.batchId,
-    MONERIS_TOKEN: t.monerisToken,
-    EXP_DATE: t.expDate,
-    ENTITY_ID: t.entityId,
-    ENTITY_TYPE: t.entityType,
-    ENTITY_STS: t.entitySts,
-    CREATION_DATE: t.creationDate,
-    LAST_USE_DATE: t.lastUseDate,
-    TRX_SEQ_NO: t.trxSeqNo,
-    BUSINESS_UNIT: t.businessUnit,
-    VALIDATION_STATUS: t.validationStatus,
-    MIGRATION_STATUS: t.migrationStatus,
-    ERROR_CODE: t.errorCode,
-    PMR: t.pmr,
-    CREATED_AT: new Date(),
-    UPDATED_AT: null,
-    UPDATED_BY: t.updatedBy,
-  }));
+  for (const t of tokens) {
+    const request = connection.request();
+    request.input('fileId', t.fileId);
+    request.input('batchId', t.batchId);
+    request.input('monerisToken', t.monerisToken);
+    request.input('expDate', t.expDate);
+    request.input('entityId', t.entityId);
+    request.input('entityType', t.entityType);
+    request.input('entitySts', t.entitySts);
+    request.input('creationDate', t.creationDate);
+    request.input('lastUseDate', t.lastUseDate);
+    request.input('trxSeqNo', t.trxSeqNo);
+    request.input('businessUnit', t.businessUnit);
+    request.input('validationStatus', t.validationStatus);
+    request.input('migrationStatus', t.migrationStatus);
+    request.input('errorCode', t.errorCode);
+    request.input('pmr', t.pmr);
+    request.input('updatedBy', t.updatedBy);
 
-  const insertedCount = await bulkInsert('[dbo].[MONERIS_TOKENS_STAGING]', columns, rows);
+    await request.query(`
+      INSERT INTO MONERIS_TOKENS_STAGING
+      (FILE_ID, BATCH_ID, MONERIS_TOKEN, EXP_DATE, ENTITY_ID, ENTITY_TYPE, ENTITY_STS,
+       CREATION_DATE, LAST_USE_DATE, TRX_SEQ_NO, BUSINESS_UNIT, VALIDATION_STATUS,
+       MIGRATION_STATUS, ERROR_CODE, PMR, UPDATED_BY)
+      VALUES
+      (@fileId, @batchId, @monerisToken, @expDate, @entityId, @entityType, @entitySts,
+       @creationDate, @lastUseDate, @trxSeqNo, @businessUnit, @validationStatus,
+       @migrationStatus, @errorCode, @pmr, @updatedBy)
+    `);
+    insertedCount++;
+  }
   logger.info('Moneris tokens loaded to staging', { insertedCount });
 }
 
