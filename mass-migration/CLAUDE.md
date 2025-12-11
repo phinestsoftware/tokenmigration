@@ -103,6 +103,44 @@ sql.connect(config).then(pool => {
 }).then(result => console.log(result.recordset));
 ```
 
+## Input File Format
+
+### File Naming Convention
+- **Input:** `{SOURCE_ID}.{TYPE}.{YYYYMMDD}.{NNNN}.input` or `{SOURCE}_{TYPE}_{YYYYMMDD}_{HHMMSS}.csv`
+- **Source IDs:** V21, WINM (WinOnline Media), TSC
+- **Type:** P (payment tokens), T (transactional history), I (ID tokens)
+
+### CSV Format
+```
+MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT
+9518050018246830,0139,E10001,1,O,20240115,20241201,,
+```
+
+### Field Validation Rules
+
+| Field | Format | Valid Values | Error Code |
+|-------|--------|--------------|------------|
+| MONERIS_TOKEN | 16 digits | Must start with `9` | E001 (not numeric), E002 (not 16 digits), E003 (wrong prefix) |
+| EXP_DATE | MMYY | Valid month/year | E004 (invalid format) |
+| ENTITY_ID | Up to 36 chars | Account number or GUID | E006 (required) |
+| ENTITY_TYPE | 1 digit | `1` (Account) or `2` (GUID) | E009 (invalid type) |
+| ENTITY_STS | 1 char | `O`/`S`/`N`/`C` (Open/Suspended/Cancelled/Closed) | E010 (invalid status) |
+| CREATION_DATE | YYYYMMDD | Valid date | - |
+| LAST_USE_DATE | YYYYMMDD | Valid date | - |
+
+### Sample Test File (from /Users/gurvindersingh/rogers/docs/test-files/)
+```csv
+MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT
+9518050018246830,0139,E10001,1,O,20240115,20241201,,
+9518050018246831,0625,E10002,1,O,20240220,20241115,,
+9518050018246832,1226,E10003,2,O,20230510,20241105,,
+9518050018246833,0328,E10004,1,S,20240101,20241001,,
+9518050018246834,0927,E10005,1,O,20240315,20241210,,
+```
+
+### Trailer Line
+Format: `{TRANSACTION_COUNT},{TIMESTAMP}` (e.g., `0000001033,20251208141500`)
+
 ## Function Flow
 1. **uploadFileBilling** (blob trigger) → loads file to staging
 2. **validateTokens** (queue) → validates tokens
