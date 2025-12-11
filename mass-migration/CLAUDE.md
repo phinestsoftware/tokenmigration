@@ -145,10 +145,23 @@ Format: `{TRANSACTION_COUNT},{TIMESTAMP}` (e.g., `0000001033,20251208141500`)
 1. **uploadFileBilling** (blob trigger) → loads file to staging
 2. **validateTokens** (queue) → validates tokens
 3. **createBatch** (queue) → calculates batch metadata
-4. **fileGen** (queue) → generates Mastercard input file
-5. **batchManager** (queue) → assigns tokens to batches
-6. **batchWorker** (queue) → processes each batch
-7. **generateBillingFile** (queue/HTTP) → generates output files
+4. **fileGen** (queue) → generates Mastercard input file, triggers mock (dev)
+5. **uploadFileMastercard** (blob trigger) → processes MC response, loads PG tokens
+6. **batchManager** (queue) → assigns tokens to batches
+7. **batchWorker** (queue) → processes each batch, joins Moneris + PG tokens
+8. **generateBillingFile** (queue/HTTP) → generates output files
+
+## Mock Mastercard Flow (Dev Environment)
+
+When `MOCK_MASTERCARD_ENABLED=true`:
+1. `fileGen` generates MC input file
+2. `fileGen` calls mock service which uploads `.mc.response` file to blob storage
+3. `uploadFileMastercard` blob trigger fires and processes the response file
+4. PG tokens are inserted to `PG_TOKENS_STAGING` table
+5. `fileGen` polls database until PG tokens are ready (max 30 seconds)
+6. `batchManager` and `batchWorker` proceed with migration
+
+This tests the **actual production code path** - only the file source differs.
 
 ## Azure Resources
 - Resource Group: `rg-tokenmigration-dev`
