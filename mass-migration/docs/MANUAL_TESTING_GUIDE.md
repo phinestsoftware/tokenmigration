@@ -474,14 +474,6 @@ MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_D
 
 ---
 
-## Support
-
-For issues or questions:
-1. Check Application Insights logs first
-2. Note the FILE_ID and exact error messages
-3. Contact the development team with details
-
----
 
 ## Quick Reference Card
 
