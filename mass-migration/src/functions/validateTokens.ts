@@ -1,7 +1,7 @@
 import { app, InvocationContext } from '@azure/functions';
 import { getConfig } from '../config/index.js';
 import { createLogger, Logger } from '../utils/logger.js';
-import { executeQuery } from '../services/database.js';
+import { executeQuery, bulkUpdate, bulkInsertValues } from '../services/database.js';
 import {
   queueCreateBatch,
   CreateBatchMessage,
@@ -75,7 +75,7 @@ async function validateTokensHandler(
 }
 
 /**
- * Validate Moneris tokens
+ * Validate Moneris tokens using BULK operations
  */
 async function validateMonerisTokens(
   fileId: string,
@@ -102,6 +102,17 @@ async function validateMonerisTokens(
 
   // Track seen tokens for duplicate detection within file
   const seenTokens = new Set<string>();
+
+  // Collect updates for bulk operations
+  const tokenUpdates: { ID: number; VALIDATION_STATUS: string; ERROR_CODE: string | null }[] = [];
+  const errorDetails: {
+    FILE_ID: string;
+    BATCH_ID: string | null;
+    MONERIS_TOKEN: string;
+    ENTITY_ID: string | null;
+    ERROR_CODE: string | null;
+    ERROR_TYPE: string;
+  }[] = [];
 
   for (const token of tokens) {
     let status = 'VALID';
@@ -150,18 +161,43 @@ async function validateMonerisTokens(
       }
     }
 
-    // Update token status
-    await executeQuery(
-      `UPDATE MONERIS_TOKENS_STAGING
-       SET VALIDATION_STATUS = @status, ERROR_CODE = @errorCode, UPDATED_AT = GETUTCDATE()
-       WHERE ID = @id`,
-      { id: token.ID, status, errorCode }
-    );
+    // Collect update for bulk operation
+    tokenUpdates.push({
+      ID: token.ID,
+      VALIDATION_STATUS: status,
+      ERROR_CODE: errorCode,
+    });
 
-    // Log error details if invalid
+    // Collect error details if invalid
     if (status !== 'VALID') {
-      await insertErrorDetails(fileId, null, token.MONERIS_TOKEN, token.ENTITY_ID, errorCode);
+      errorDetails.push({
+        FILE_ID: fileId,
+        BATCH_ID: null,
+        MONERIS_TOKEN: token.MONERIS_TOKEN,
+        ENTITY_ID: token.ENTITY_ID,
+        ERROR_CODE: errorCode,
+        ERROR_TYPE: 'VALIDATION',
+      });
     }
+  }
+
+  // Execute bulk update for token statuses
+  logger.info('Bulk updating validation statuses', { count: tokenUpdates.length });
+  await bulkUpdate(
+    'MONERIS_TOKENS_STAGING',
+    'ID',
+    tokenUpdates,
+    ['VALIDATION_STATUS', 'ERROR_CODE']
+  );
+
+  // Bulk insert error details
+  if (errorDetails.length > 0) {
+    logger.info('Bulk inserting validation errors', { count: errorDetails.length });
+    await bulkInsertValues(
+      'MIGRATION_ERROR_DETAILS',
+      ['FILE_ID', 'BATCH_ID', 'MONERIS_TOKEN', 'ENTITY_ID', 'ERROR_CODE', 'ERROR_TYPE'],
+      errorDetails
+    );
   }
 
   // Check for duplicates in Payment Hub (existing tokens)
@@ -226,7 +262,7 @@ async function validateMonerisTokens(
 }
 
 /**
- * Validate PG tokens (Mastercard response)
+ * Validate PG tokens (Mastercard response) using BULK operations
  */
 async function validatePgTokens(fileId: string, logger: Logger): Promise<void> {
   // For PG tokens, mainly check that we have valid tokens and correlationIds
@@ -241,24 +277,26 @@ async function validatePgTokens(fileId: string, logger: Logger): Promise<void> {
   let validCount = 0;
   let failureCount = 0;
 
+  // Collect updates for bulk operation
+  const successUpdates: { ID: number; MIGRATION_STATUS: string }[] = [];
+  const failureUpdates: { ID: number; MIGRATION_STATUS: string }[] = [];
+
   for (const token of tokens) {
     if (token.RESULT === 'SUCCESS' && token.PG_TOKEN) {
       validCount++;
-      await executeQuery(
-        `UPDATE PG_TOKENS_STAGING
-         SET MIGRATION_STATUS = 'COMPLETED', UPDATED_AT = GETUTCDATE()
-         WHERE ID = @id`,
-        { id: token.ID }
-      );
+      successUpdates.push({ ID: token.ID, MIGRATION_STATUS: 'COMPLETED' });
     } else {
       failureCount++;
-      await executeQuery(
-        `UPDATE PG_TOKENS_STAGING
-         SET MIGRATION_STATUS = 'FAILED', UPDATED_AT = GETUTCDATE()
-         WHERE ID = @id`,
-        { id: token.ID }
-      );
+      failureUpdates.push({ ID: token.ID, MIGRATION_STATUS: 'FAILED' });
     }
+  }
+
+  // Execute bulk updates
+  if (successUpdates.length > 0) {
+    await bulkUpdate('PG_TOKENS_STAGING', 'ID', successUpdates, ['MIGRATION_STATUS']);
+  }
+  if (failureUpdates.length > 0) {
+    await bulkUpdate('PG_TOKENS_STAGING', 'ID', failureUpdates, ['MIGRATION_STATUS']);
   }
 
   logger.info('PG token validation completed', { validCount, failureCount });
@@ -270,15 +308,15 @@ async function validatePgTokens(fileId: string, logger: Logger): Promise<void> {
 }
 
 /**
- * Check for existing tokens in Payment Hub
+ * Check for existing tokens in Payment Hub - using bulk update
  */
 async function checkExistingTokens(fileId: string, logger: Logger): Promise<number> {
   // Check PMR_MONERIS_MAPPING for existing tokens
   // In a real implementation, this would join with Payment Hub tables
   // For now, we'll simulate this check
 
-  const result = await executeQuery<{ MONERIS_TOKEN: string }>(
-    `SELECT m.MONERIS_TOKEN
+  const result = await executeQuery<{ ID: number; MONERIS_TOKEN: string }>(
+    `SELECT m.ID, m.MONERIS_TOKEN
      FROM MONERIS_TOKENS_STAGING m
      WHERE m.FILE_ID = @fileId
        AND m.VALIDATION_STATUS = 'VALID'
@@ -294,40 +332,24 @@ async function checkExistingTokens(fileId: string, logger: Logger): Promise<numb
   const duplicateTokens = result.recordset;
 
   if (duplicateTokens.length > 0) {
-    // Mark as duplicates
-    for (const token of duplicateTokens) {
-      await executeQuery(
-        `UPDATE MONERIS_TOKENS_STAGING
-         SET VALIDATION_STATUS = 'DUPLICATE',
-             ERROR_CODE = @errorCode,
-             UPDATED_AT = GETUTCDATE()
-         WHERE FILE_ID = @fileId AND MONERIS_TOKEN = @token`,
-        { fileId, token: token.MONERIS_TOKEN, errorCode: ValidationErrors.DUPLICATE_IN_PHUB }
-      );
-    }
+    // Bulk update duplicates
+    const duplicateUpdates = duplicateTokens.map(token => ({
+      ID: token.ID,
+      VALIDATION_STATUS: 'DUPLICATE',
+      ERROR_CODE: ValidationErrors.DUPLICATE_IN_PHUB,
+    }));
+
+    await bulkUpdate(
+      'MONERIS_TOKENS_STAGING',
+      'ID',
+      duplicateUpdates,
+      ['VALIDATION_STATUS', 'ERROR_CODE']
+    );
 
     logger.info('Found existing tokens in Payment Hub', { count: duplicateTokens.length });
   }
 
   return duplicateTokens.length;
-}
-
-/**
- * Insert error details
- */
-async function insertErrorDetails(
-  fileId: string,
-  batchId: string | null,
-  monerisToken: string,
-  entityId: string | null,
-  errorCode: string | null
-): Promise<void> {
-  await executeQuery(
-    `INSERT INTO MIGRATION_ERROR_DETAILS
-     (FILE_ID, BATCH_ID, MONERIS_TOKEN, ENTITY_ID, ERROR_CODE, ERROR_TYPE)
-     VALUES (@fileId, @batchId, @monerisToken, @entityId, @errorCode, 'VALIDATION')`,
-    { fileId, batchId, monerisToken, entityId, errorCode }
-  );
 }
 
 /**

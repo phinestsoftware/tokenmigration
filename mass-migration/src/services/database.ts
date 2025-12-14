@@ -132,3 +132,129 @@ export const SqlTypes = {
   datetime2: sql.DateTime2,  // sql.DateTime2 is a factory function
   char: (length: number): sql.ISqlType => sql.Char(length),
 };
+
+// Safe chunk size for all bulk operations (100 rows × 20 cols max = 2000 params, under SQL limit of 2100)
+const BULK_CHUNK_SIZE = 100;
+
+/**
+ * Bulk UPDATE using a temp table and JOIN
+ * This is much faster than individual UPDATE statements for large datasets
+ *
+ * @param tableName - Target table to update
+ * @param keyColumn - Column name used for matching (e.g., 'ID')
+ * @param updates - Array of objects with key and values to update
+ * @param updateColumns - Columns to update (excluding the key)
+ */
+export async function bulkUpdate<T extends Record<string, unknown>>(
+  tableName: string,
+  keyColumn: string,
+  updates: T[],
+  updateColumns: string[]
+): Promise<number> {
+  if (updates.length === 0) return 0;
+
+  const connection = await getConnection();
+  let totalUpdated = 0;
+
+  logger.info(`Bulk update: ${updates.length} rows in ${tableName}, chunk size ${BULK_CHUNK_SIZE}`);
+
+  // Process in chunks to avoid parameter limits and memory issues
+  for (let i = 0; i < updates.length; i += BULK_CHUNK_SIZE) {
+    const chunk = updates.slice(i, i + BULK_CHUNK_SIZE);
+
+    // Build VALUES clause with parameters
+    const valuesClauses: string[] = [];
+    const request = connection.request();
+
+    chunk.forEach((row, idx) => {
+      const paramNames: string[] = [];
+
+      // Add key column parameter
+      const keyParamName = `key${idx}`;
+      request.input(keyParamName, row[keyColumn]);
+      paramNames.push(`@${keyParamName}`);
+
+      // Add update column parameters
+      updateColumns.forEach((col) => {
+        const paramName = `${col.toLowerCase()}${idx}`;
+        request.input(paramName, row[col]);
+        paramNames.push(`@${paramName}`);
+      });
+
+      valuesClauses.push(`(${paramNames.join(', ')})`);
+    });
+
+    // Build column list for temp table
+    const tempColumns = [keyColumn, ...updateColumns].join(', ');
+
+    // Build SET clause
+    const setClauses = updateColumns.map(col => `t.${col} = s.${col}`).join(', ');
+
+    // Build the UPDATE query with VALUES as source
+    const query = `
+      UPDATE t
+      SET ${setClauses}, t.UPDATED_AT = GETUTCDATE()
+      FROM ${tableName} t
+      INNER JOIN (VALUES ${valuesClauses.join(', ')}) AS s(${tempColumns})
+      ON t.${keyColumn} = s.${keyColumn}
+    `;
+
+    const result = await request.query(query);
+    totalUpdated += result.rowsAffected[0] || 0;
+  }
+
+  logger.info(`Bulk updated ${totalUpdated} rows in ${tableName}`);
+  return totalUpdated;
+}
+
+/**
+ * Bulk INSERT using a multi-row VALUES clause
+ * More efficient than individual INSERT statements
+ *
+ * @param tableName - Target table
+ * @param columns - Column names to insert
+ * @param rows - Array of objects with column values
+ */
+export async function bulkInsertValues<T extends Record<string, unknown>>(
+  tableName: string,
+  columns: string[],
+  rows: T[]
+): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  const connection = await getConnection();
+  let totalInserted = 0;
+
+  logger.info(`Bulk insert: ${rows.length} rows into ${tableName}, chunk size ${BULK_CHUNK_SIZE}`);
+
+  // Process in chunks
+  for (let i = 0; i < rows.length; i += BULK_CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + BULK_CHUNK_SIZE);
+
+    const valuesClauses: string[] = [];
+    const request = connection.request();
+
+    chunk.forEach((row, idx) => {
+      const paramNames: string[] = [];
+
+      columns.forEach((col) => {
+        const paramName = `${col.toLowerCase()}${idx}`;
+        request.input(paramName, row[col]);
+        paramNames.push(`@${paramName}`);
+      });
+
+      valuesClauses.push(`(${paramNames.join(', ')})`);
+    });
+
+    const query = `
+      INSERT INTO ${tableName} (${columns.join(', ')})
+      VALUES ${valuesClauses.join(', ')}
+    `;
+
+    const result = await request.query(query);
+    totalInserted += result.rowsAffected[0] || 0;
+  }
+
+  logger.info(`Bulk inserted ${totalInserted} rows into ${tableName}`);
+  return totalInserted;
+}

@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getConfig } from '../config/index.js';
 import { createLogger, Logger } from '../utils/logger.js';
 import { downloadBlob } from '../services/blobStorage.js';
-import { executeQuery, bulkInsert, SqlTypes, getConnection } from '../services/database.js';
+import { executeQuery, bulkInsertValues } from '../services/database.js';
 import { queueValidateTokens, ValidateTokensMessage } from '../services/queueService.js';
 import { sendMigrationStartEmail } from '../services/emailService.js';
 import { parseCsv, validateFileStructure } from '../utils/fileParser.js';
@@ -134,7 +134,7 @@ async function uploadFileHandler(
 }
 
 /**
- * Load Moneris tokens to staging table
+ * Load Moneris tokens to staging table using BULK INSERT
  */
 async function loadMonerisTokensToStaging(
   records: Record<string, string>[],
@@ -146,99 +146,39 @@ async function loadMonerisTokensToStaging(
     return toMonerisTokenStaging(record, fileId);
   });
 
-  // Use parameterized INSERT instead of bulk insert to avoid BCP column type issues
-  const connection = await getConnection();
-  let insertedCount = 0;
+  // Map to bulk insert format
+  const rows = tokens.map((t) => ({
+    FILE_ID: t.fileId,
+    BATCH_ID: t.batchId,
+    MONERIS_TOKEN: t.monerisToken,
+    EXP_DATE: t.expDate,
+    ENTITY_ID: t.entityId,
+    ENTITY_TYPE: t.entityType,
+    ENTITY_STS: t.entitySts,
+    CREATION_DATE: t.creationDate,
+    LAST_USE_DATE: t.lastUseDate,
+    TRX_SEQ_NO: t.trxSeqNo,
+    BUSINESS_UNIT: t.businessUnit,
+    VALIDATION_STATUS: t.validationStatus,
+    MIGRATION_STATUS: t.migrationStatus,
+    ERROR_CODE: t.errorCode,
+    PMR: t.pmr,
+    UPDATED_BY: t.updatedBy,
+  }));
 
-  for (const t of tokens) {
-    const request = connection.request();
-    request.input('fileId', t.fileId);
-    request.input('batchId', t.batchId);
-    request.input('monerisToken', t.monerisToken);
-    request.input('expDate', t.expDate);
-    request.input('entityId', t.entityId);
-    request.input('entityType', t.entityType);
-    request.input('entitySts', t.entitySts);
-    request.input('creationDate', t.creationDate);
-    request.input('lastUseDate', t.lastUseDate);
-    request.input('trxSeqNo', t.trxSeqNo);
-    request.input('businessUnit', t.businessUnit);
-    request.input('validationStatus', t.validationStatus);
-    request.input('migrationStatus', t.migrationStatus);
-    request.input('errorCode', t.errorCode);
-    request.input('pmr', t.pmr);
-    request.input('updatedBy', t.updatedBy);
+  const columns = [
+    'FILE_ID', 'BATCH_ID', 'MONERIS_TOKEN', 'EXP_DATE', 'ENTITY_ID', 'ENTITY_TYPE', 'ENTITY_STS',
+    'CREATION_DATE', 'LAST_USE_DATE', 'TRX_SEQ_NO', 'BUSINESS_UNIT', 'VALIDATION_STATUS',
+    'MIGRATION_STATUS', 'ERROR_CODE', 'PMR', 'UPDATED_BY'
+  ];
 
-    await request.query(`
-      INSERT INTO MONERIS_TOKENS_STAGING
-      (FILE_ID, BATCH_ID, MONERIS_TOKEN, EXP_DATE, ENTITY_ID, ENTITY_TYPE, ENTITY_STS,
-       CREATION_DATE, LAST_USE_DATE, TRX_SEQ_NO, BUSINESS_UNIT, VALIDATION_STATUS,
-       MIGRATION_STATUS, ERROR_CODE, PMR, UPDATED_BY)
-      VALUES
-      (@fileId, @batchId, @monerisToken, @expDate, @entityId, @entityType, @entitySts,
-       @creationDate, @lastUseDate, @trxSeqNo, @businessUnit, @validationStatus,
-       @migrationStatus, @errorCode, @pmr, @updatedBy)
-    `);
-    insertedCount++;
-  }
+  logger.info('Bulk inserting Moneris tokens', { count: rows.length });
+  const insertedCount = await bulkInsertValues('MONERIS_TOKENS_STAGING', columns, rows);
   logger.info('Moneris tokens loaded to staging', { insertedCount });
 }
 
 /**
- * Load PG tokens (Mastercard response) to staging table
- */
-async function loadPgTokensToStaging(
-  records: Record<string, string>[],
-  fileId: string,
-  logger: Logger
-): Promise<void> {
-  const tokens = records.map((row) => {
-    const record = mapCsvRowToPgToken(row);
-    return toPgTokenStaging(record, fileId);
-  });
-
-  const columns = [
-    { name: 'FILE_ID', type: SqlTypes.varchar(50) },
-    { name: 'MONERIS_TOKEN', type: SqlTypes.varchar(16) },
-    { name: 'PG_TOKEN', type: SqlTypes.varchar(16) },
-    { name: 'CARD_NUMBER_MASKED', type: SqlTypes.varchar(20) },
-    { name: 'CARD_BRAND', type: SqlTypes.varchar(20) },
-    { name: 'FIRST_SIX', type: SqlTypes.varchar(6) },
-    { name: 'LAST_FOUR', type: SqlTypes.varchar(4) },
-    { name: 'FUNDING_METHOD', type: SqlTypes.varchar(20) },
-    { name: 'EXP_DATE', type: SqlTypes.varchar(4) },
-    { name: 'EXP_MONTH', type: SqlTypes.varchar(2) },
-    { name: 'EXP_YEAR', type: SqlTypes.varchar(2) },
-    { name: 'RESULT', type: SqlTypes.varchar(20) },
-    { name: 'ERROR_CAUSE', type: SqlTypes.varchar(50) },
-    { name: 'ERROR_EXPLANATION', type: SqlTypes.varchar(255) },
-    { name: 'MIGRATION_STATUS', type: SqlTypes.varchar(20) },
-  ];
-
-  const rows = tokens.map((t) => ({
-    FILE_ID: t.fileId,
-    MONERIS_TOKEN: t.monerisToken,
-    PG_TOKEN: t.pgToken,
-    CARD_NUMBER_MASKED: t.cardNumberMasked,
-    CARD_BRAND: t.cardBrand,
-    FIRST_SIX: t.firstSix,
-    LAST_FOUR: t.lastFour,
-    FUNDING_METHOD: t.fundingMethod,
-    EXP_DATE: t.expDate,
-    EXP_MONTH: t.expMonth,
-    EXP_YEAR: t.expYear,
-    RESULT: t.result,
-    ERROR_CAUSE: t.errorCause,
-    ERROR_EXPLANATION: t.errorExplanation,
-    MIGRATION_STATUS: t.migrationStatus,
-  }));
-
-  const insertedCount = await bulkInsert('PG_TOKENS_STAGING', columns, rows);
-  logger.info('PG tokens loaded to staging', { insertedCount });
-}
-
-/**
- * Handle Mastercard response file processing
+ * Handle Mastercard response file processing using BULK INSERT
  * Parses the MC response CSV and inserts PG tokens to staging
  */
 async function handleMastercardResponse(
@@ -286,39 +226,36 @@ async function handleMastercardResponse(
   await insertAuditLog(fileId, null, 'MC_RESP_RECV',
     `Mastercard response received: ${fileName}`, { recordCount });
 
-  // Insert PG tokens to staging using parameterized INSERT (avoid bulkInsert issues)
-  let insertedCount = 0;
-  for (const row of parseResult.records) {
+  // Map to bulk insert format
+  const rows = parseResult.records.map((row) => {
     const record = mapCsvRowToPgToken(row);
     const staging = toPgTokenStaging(record, fileId);
+    return {
+      FILE_ID: staging.fileId,
+      MONERIS_TOKEN: staging.monerisToken,
+      PG_TOKEN: staging.pgToken,
+      CARD_NUMBER_MASKED: staging.cardNumberMasked,
+      CARD_BRAND: staging.cardBrand,
+      FIRST_SIX: staging.firstSix,
+      LAST_FOUR: staging.lastFour,
+      FUNDING_METHOD: staging.fundingMethod,
+      EXP_DATE: staging.expDate,
+      EXP_MONTH: staging.expMonth,
+      EXP_YEAR: staging.expYear,
+      RESULT: staging.result,
+      ERROR_CAUSE: staging.errorCause,
+      ERROR_EXPLANATION: staging.errorExplanation,
+      MIGRATION_STATUS: staging.migrationStatus,
+    };
+  });
 
-    await executeQuery(`
-      INSERT INTO PG_TOKENS_STAGING
-      (FILE_ID, MONERIS_TOKEN, PG_TOKEN, CARD_NUMBER_MASKED, CARD_BRAND, FIRST_SIX, LAST_FOUR,
-       FUNDING_METHOD, EXP_DATE, EXP_MONTH, EXP_YEAR, RESULT, ERROR_CAUSE, ERROR_EXPLANATION, MIGRATION_STATUS)
-      VALUES
-      (@fileId, @monerisToken, @pgToken, @cardNumberMasked, @cardBrand, @firstSix, @lastFour,
-       @fundingMethod, @expDate, @expMonth, @expYear, @result, @errorCause, @errorExplanation, @migrationStatus)
-    `, {
-      fileId: staging.fileId,
-      monerisToken: staging.monerisToken,
-      pgToken: staging.pgToken,
-      cardNumberMasked: staging.cardNumberMasked,
-      cardBrand: staging.cardBrand,
-      firstSix: staging.firstSix,
-      lastFour: staging.lastFour,
-      fundingMethod: staging.fundingMethod,
-      expDate: staging.expDate,
-      expMonth: staging.expMonth,
-      expYear: staging.expYear,
-      result: staging.result,
-      errorCause: staging.errorCause,
-      errorExplanation: staging.errorExplanation,
-      migrationStatus: staging.migrationStatus,
-    });
-    insertedCount++;
-  }
+  const columns = [
+    'FILE_ID', 'MONERIS_TOKEN', 'PG_TOKEN', 'CARD_NUMBER_MASKED', 'CARD_BRAND', 'FIRST_SIX', 'LAST_FOUR',
+    'FUNDING_METHOD', 'EXP_DATE', 'EXP_MONTH', 'EXP_YEAR', 'RESULT', 'ERROR_CAUSE', 'ERROR_EXPLANATION', 'MIGRATION_STATUS'
+  ];
 
+  fileLogger.info('Bulk inserting PG tokens', { count: rows.length });
+  const insertedCount = await bulkInsertValues('PG_TOKENS_STAGING', columns, rows);
   fileLogger.info('PG tokens loaded to staging', { insertedCount });
 
   // Insert audit log for successful load

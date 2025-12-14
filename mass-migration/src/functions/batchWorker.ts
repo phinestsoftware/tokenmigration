@@ -1,7 +1,7 @@
 import { app, InvocationContext } from '@azure/functions';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger, Logger } from '../utils/logger.js';
-import { executeQuery } from '../services/database.js';
+import { executeQuery, bulkUpdate, bulkInsertValues } from '../services/database.js';
 import { decodeQueueMessage, BatchWorkerMessage } from '../services/queueService.js';
 import { AuditMessageCodes } from '../models/migrationBatch.js';
 
@@ -95,7 +95,7 @@ async function batchWorkerHandler(
 }
 
 /**
- * Process Mass Migration batch
+ * Process Mass Migration batch using BULK operations
  * For mass migration, we join Moneris tokens with PG tokens (from MC response) and update Payment Hub
  */
 async function processMassMigrationBatch(
@@ -132,7 +132,20 @@ async function processMassMigrationBatch(
 
   logger.info('PG tokens found', { pgTokenCount: pgTokenMap.size });
 
-  // Process each token
+  // Collect updates for bulk operations
+  const successUpdates: { ID: number; MIGRATION_STATUS: string; PMR: string }[] = [];
+  const failureUpdates: { ID: number; MIGRATION_STATUS: string; ERROR_CODE: string }[] = [];
+  const errorDetails: {
+    FILE_ID: string;
+    BATCH_ID: string;
+    MONERIS_TOKEN: string;
+    ENTITY_ID: string | null;
+    ERROR_CODE: string;
+    ERROR_MESSAGE: string;
+    ERROR_TYPE: string;
+  }[] = [];
+
+  // Process each token - collect updates but don't execute individually
   for (const moneris of monerisTokens) {
     const pgToken = pgTokenMap.get(moneris.MONERIS_TOKEN);
 
@@ -140,42 +153,73 @@ async function processMassMigrationBatch(
       // Generate PMR
       const pmr = generatePMR();
 
-      // Update Payment Hub tables (simulated - in real implementation, this would update actual tables)
-      await updatePaymentHub(moneris, pgToken, pmr);
-
-      // Update Moneris token status
-      await executeQuery(
-        `UPDATE MONERIS_TOKENS_STAGING
-         SET MIGRATION_STATUS = 'COMPLETED', PMR = @pmr, UPDATED_AT = GETUTCDATE()
-         WHERE ID = @id`,
-        { id: moneris.ID, pmr }
-      );
-
-      logger.debug('Token migrated', { monerisToken: moneris.MONERIS_TOKEN, pmr });
+      // Collect success update
+      successUpdates.push({
+        ID: moneris.ID,
+        MIGRATION_STATUS: 'COMPLETED',
+        PMR: pmr,
+      });
 
     } else {
-      // Mark as failed
+      // Collect failure update
       const errorMessage = pgToken
         ? `MC response: ${pgToken.RESULT}`
         : 'No MC response found';
 
-      await executeQuery(
-        `UPDATE MONERIS_TOKENS_STAGING
-         SET MIGRATION_STATUS = 'FAILED', ERROR_CODE = 'NO_PG_TOKEN', UPDATED_AT = GETUTCDATE()
-         WHERE ID = @id`,
-        { id: moneris.ID }
-      );
+      failureUpdates.push({
+        ID: moneris.ID,
+        MIGRATION_STATUS: 'FAILED',
+        ERROR_CODE: 'NO_PG_TOKEN',
+      });
 
-      // Insert error details
-      await insertErrorDetails(fileId, batchId, moneris.MONERIS_TOKEN, moneris.ENTITY_ID,
-        'NO_PG_TOKEN', errorMessage);
-
-      logger.debug('Token migration failed', {
-        monerisToken: moneris.MONERIS_TOKEN,
-        reason: errorMessage,
+      // Collect error details for bulk insert
+      errorDetails.push({
+        FILE_ID: fileId,
+        BATCH_ID: batchId,
+        MONERIS_TOKEN: moneris.MONERIS_TOKEN,
+        ENTITY_ID: moneris.ENTITY_ID,
+        ERROR_CODE: 'NO_PG_TOKEN',
+        ERROR_MESSAGE: errorMessage,
+        ERROR_TYPE: 'MIGRATION',
       });
     }
   }
+
+  // Execute bulk updates
+  if (successUpdates.length > 0) {
+    logger.info('Bulk updating successful tokens', { count: successUpdates.length });
+    await bulkUpdate(
+      'MONERIS_TOKENS_STAGING',
+      'ID',
+      successUpdates,
+      ['MIGRATION_STATUS', 'PMR']
+    );
+  }
+
+  if (failureUpdates.length > 0) {
+    logger.info('Bulk updating failed tokens', { count: failureUpdates.length });
+    await bulkUpdate(
+      'MONERIS_TOKENS_STAGING',
+      'ID',
+      failureUpdates,
+      ['MIGRATION_STATUS', 'ERROR_CODE']
+    );
+  }
+
+  // Bulk insert error details
+  if (errorDetails.length > 0) {
+    logger.info('Bulk inserting error details', { count: errorDetails.length });
+    await bulkInsertValues(
+      'MIGRATION_ERROR_DETAILS',
+      ['FILE_ID', 'BATCH_ID', 'MONERIS_TOKEN', 'ENTITY_ID', 'ERROR_CODE', 'ERROR_MESSAGE', 'ERROR_TYPE'],
+      errorDetails
+    );
+  }
+
+  logger.info('Batch processing completed', {
+    successCount: successUpdates.length,
+    failureCount: failureUpdates.length,
+  });
 }
 
 /**
@@ -311,25 +355,6 @@ async function updateBatchStatus(
   query += ` WHERE BATCH_ID = @batchId`;
 
   await executeQuery(query, { batchId, status, successCount, failureCount });
-}
-
-/**
- * Insert error details
- */
-async function insertErrorDetails(
-  fileId: string,
-  batchId: string,
-  monerisToken: string,
-  entityId: string | null,
-  errorCode: string,
-  errorMessage: string
-): Promise<void> {
-  await executeQuery(
-    `INSERT INTO MIGRATION_ERROR_DETAILS
-     (FILE_ID, BATCH_ID, MONERIS_TOKEN, ENTITY_ID, ERROR_CODE, ERROR_MESSAGE, ERROR_TYPE)
-     VALUES (@fileId, @batchId, @monerisToken, @entityId, @errorCode, @errorMessage, 'MIGRATION')`,
-    { fileId, batchId, monerisToken, entityId, errorCode, errorMessage }
-  );
 }
 
 /**
