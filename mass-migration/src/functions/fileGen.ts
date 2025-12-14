@@ -4,8 +4,6 @@ import { createLogger, Logger } from '../utils/logger.js';
 import { executeQuery } from '../services/database.js';
 import { uploadBlob } from '../services/blobStorage.js';
 import {
-  queueBatchManager,
-  BatchManagerMessage,
   decodeQueueMessage,
   FileGenMessage,
 } from '../services/queueService.js';
@@ -103,56 +101,22 @@ async function fileGenHandler(
       { fileName: mcFileName, tokenCount: uniqueTokens.length });
 
     // If mock mode is enabled, trigger mock MC response
+    // The MC response blob trigger (uploadFileMastercard) will queue batchManager
+    // after PG tokens are loaded - this is the correct production flow
     if (config.MOCK_MASTERCARD_ENABLED) {
       logger.info('Mock mode enabled, generating mock MC response');
       await triggerMockMastercardResponse(fileId, uniqueTokens, sourceId, config);
-
-      // Wait for the blob trigger to process the MC response file
-      // This ensures PG tokens are in staging before batchWorker runs
-      logger.info('Waiting for MC response blob trigger to process...');
-      const maxWaitMs = 30000; // 30 seconds max
-      const pollIntervalMs = 2000; // Check every 2 seconds
-      let waited = 0;
-
-      while (waited < maxWaitMs) {
-        const pgCount = await executeQuery<{ count: number }>(
-          `SELECT COUNT(*) as count FROM PG_TOKENS_STAGING WHERE FILE_ID = @fileId`,
-          { fileId }
-        );
-
-        if ((pgCount.recordset[0]?.count ?? 0) >= uniqueTokens.length) {
-          logger.info('PG tokens ready in staging', { count: pgCount.recordset[0]?.count });
-          break;
-        }
-
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-        waited += pollIntervalMs;
-        logger.info('Still waiting for PG tokens...', { waited, expected: uniqueTokens.length });
-      }
-
-      if (waited >= maxWaitMs) {
-        logger.warn('Timeout waiting for PG tokens - proceeding anyway');
-      }
+      logger.info('Mock MC response generated, waiting for blob trigger to process and queue batch manager');
     }
 
-    // Get total batches from batch record
-    const batchResult = await executeQuery<{ TOTAL_BATCHES: number }>(
-      `SELECT TOTAL_BATCHES FROM TOKEN_MIGRATION_BATCH
-       WHERE FILE_ID = @fileId AND BATCH_ID = @fileId`,
-      { fileId }
-    );
-
-    const totalBatches = batchResult.recordset[0]?.TOTAL_BATCHES ?? 1;
-
-    // Queue batch manager message
-    const batchManagerMessage: BatchManagerMessage = {
-      fileId,
-      sourceId,
-      totalBatches,
-    };
-    await queueBatchManager(batchManagerMessage);
-
-    logger.info('File generation completed, queued for batch management');
+    // In production mode, fileGen completes here.
+    // The MC response will arrive later (hours/days) via external EFT process.
+    // uploadFileMastercard will queue batchManager when MC response is processed.
+    logger.info('File generation completed', {
+      mcFileName,
+      tokenCount: uniqueTokens.length,
+      mockMode: config.MOCK_MASTERCARD_ENABLED
+    });
 
   } catch (error) {
     logger.error('Failed to generate file', error);

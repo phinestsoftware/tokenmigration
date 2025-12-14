@@ -4,7 +4,7 @@ import { getConfig } from '../config/index.js';
 import { createLogger, Logger } from '../utils/logger.js';
 import { downloadBlob } from '../services/blobStorage.js';
 import { executeQuery, bulkInsertValues } from '../services/database.js';
-import { queueValidateTokens, ValidateTokensMessage } from '../services/queueService.js';
+import { queueValidateTokens, ValidateTokensMessage, queueBatchManager, BatchManagerMessage } from '../services/queueService.js';
 import { sendMigrationStartEmail } from '../services/emailService.js';
 import { parseCsv, validateFileStructure } from '../utils/fileParser.js';
 import {
@@ -261,6 +261,34 @@ async function handleMastercardResponse(
   // Insert audit log for successful load
   await insertAuditLog(fileId, null, 'MC_RESP_LOAD',
     `Mastercard response loaded: ${insertedCount} tokens`, { insertedCount });
+
+  // Now that PG tokens are loaded, queue batch manager to start processing
+  // This is the correct point to start batch processing - after MC response is available
+  const batchResult = await executeQuery<{ SOURCE_ID: string; TOTAL_BATCHES: number }>(
+    `SELECT SOURCE_ID, TOTAL_BATCHES FROM TOKEN_MIGRATION_BATCH
+     WHERE FILE_ID = @fileId AND BATCH_ID = @fileId`,
+    { fileId }
+  );
+
+  if (batchResult.recordset.length > 0) {
+    const { SOURCE_ID: sourceId, TOTAL_BATCHES: totalBatches } = batchResult.recordset[0];
+
+    const batchManagerMessage: BatchManagerMessage = {
+      fileId,
+      sourceId,
+      totalBatches: totalBatches ?? 1,
+    };
+
+    await queueBatchManager(batchManagerMessage);
+    fileLogger.info('PG tokens loaded, queued for batch management', {
+      fileId,
+      sourceId,
+      totalBatches,
+      pgTokenCount: insertedCount
+    });
+  } else {
+    fileLogger.warn('No batch record found for fileId, cannot queue batch manager', { fileId });
+  }
 }
 
 /**
