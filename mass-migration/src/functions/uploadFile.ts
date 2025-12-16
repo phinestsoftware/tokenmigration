@@ -188,29 +188,40 @@ async function handleMastercardResponse(
 ): Promise<void> {
   // Extract file ID from filename: FILE_xxxx.mc.response or SOURCE.TYPE.DATE.SEQ.mc.response
   let fileId: string = '';
-  if (fileName.startsWith('FILE_')) {
-    // Format: FILE_1234567890.mc.response
-    fileId = fileName.replace('.mc.response', '');
+  const baseFileName = fileName.replace('.mc.response', '');
+
+  // First, try to parse the filename to get the proper file ID
+  const parsedName = parseFileName(baseFileName);
+  if (parsedName) {
+    // Construct the expected file ID from parsed components
+    fileId = `${parsedName.sourceId}.${parsedName.tokenType}.${parsedName.date}.${parsedName.sequence}`;
+    logger.info('Parsed MC response filename', { fileName, fileId, parsedName });
+  } else if (fileName.startsWith('FILE_')) {
+    // Format: FILE_1234567890.mc.response (legacy/fallback format)
+    fileId = baseFileName;
+    logger.warn('MC response uses FILE_ format, attempting database lookup', { fileName });
+
+    // Try to find the corresponding batch by looking for recent batches
+    const result = await executeQuery(
+      `SELECT TOP 1 FILE_ID, SOURCE_ID, TOKEN_TYPE FROM TOKEN_MIGRATION_BATCH
+       WHERE CREATED_AT >= DATEADD(hour, -24, GETUTCDATE())
+       ORDER BY CREATED_AT DESC`,
+      {}
+    );
+    const firstRow = result.recordset[0] as { FILE_ID?: string; SOURCE_ID?: string; TOKEN_TYPE?: string } | undefined;
+    if (firstRow?.FILE_ID) {
+      logger.info('Found recent batch, using its FILE_ID', {
+        originalFileId: fileId,
+        correctedFileId: firstRow.FILE_ID,
+        sourceId: firstRow.SOURCE_ID,
+        tokenType: firstRow.TOKEN_TYPE
+      });
+      fileId = firstRow.FILE_ID;
+    }
   } else {
-    // Format: V21.P.20251208.0001.mc.response -> need to match to existing batch
-    const parsedName = parseFileName(fileName.replace('.mc.response', ''));
-    if (parsedName) {
-      // Look up the batch by matching source/type/date pattern
-      const result = await executeQuery(
-        `SELECT TOP 1 FILE_ID FROM TOKEN_MIGRATION_BATCH
-         WHERE SOURCE_ID = @sourceId AND TOKEN_TYPE = @tokenType
-         ORDER BY CREATED_AT DESC`,
-        { sourceId: parsedName.sourceId, tokenType: parsedName.tokenType }
-      );
-      const firstRow = result.recordset[0] as { FILE_ID?: string } | undefined;
-      if (firstRow?.FILE_ID) {
-        fileId = firstRow.FILE_ID;
-      }
-    }
-    // Fallback: generate from filename
-    if (!fileId) {
-      fileId = 'FILE_' + Date.now();
-    }
+    // Fallback: use the filename itself
+    logger.warn('Could not parse MC response filename, using as-is', { fileName, baseFileName });
+    fileId = baseFileName;
   }
 
   const fileLogger = logger.withFileId(fileId);

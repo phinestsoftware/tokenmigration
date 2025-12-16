@@ -41,8 +41,12 @@ echo -e "${GREEN}Connection string obtained successfully${NC}"
 if [ "$1" == "--generate" ] || [ -z "$1" ]; then
   # Generate a test file
   TOKEN_PREFIX="${2:-$(shuf -i 9700-9799 -n 1)}"
-  TIMESTAMP=$(date +%Y%m%d%H%M%S)
-  FILENAME="V21_P_${TIMESTAMP}.csv"
+  # Format: SOURCE_ID.TYPE.YYYYMMDD.NNNN.extension (dots, not underscores!)
+  # Example: V21.P.20251215.0123.input
+  DATE=$(date +%Y%m%d)
+  # Generate unique 4-digit sequence from last 4 digits of epoch seconds
+  SEQUENCE=$(printf "%04d" $(($(date +%s) % 10000)))
+  FILENAME="V21.P.${DATE}.${SEQUENCE}.input"
   FILE_PATH="/tmp/${FILENAME}"
 
   echo "Generating test file with token prefix: ${TOKEN_PREFIX}"
