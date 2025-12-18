@@ -159,3 +159,18 @@ Test endpoints:
 1. **CS-PROCESS Service**: The actual de-tokenization service called by BPS is not in this codebase
 2. **Token Storage**: No code shows how Token ↔ PAN mappings are stored for later de-tokenization
 3. **BPS-SCHEDULER**: Template only, missing actual scheduling logic
+
+## Mass-Migration Secondary Repository
+
+The `mass-migration/` folder is synced to a separate repository for restricted access:
+
+- **Main repo:** `git@github.com:phinestsoftware/tokenmigration.git` (this repo)
+- **Secondary repo:** `git@github.com:phinestsoftware/rogers-mass-migration.git`
+
+The secondary repo excludes `CLAUDE.md` and other sensitive/build files.
+
+Use the sync script to manage both repos:
+
+```bash
+./mass-migration/scripts/sync-to-secondary-repo.sh --help
+```
