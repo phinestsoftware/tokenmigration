@@ -464,15 +464,17 @@ for HASH in $COMMITS; do
 
     log_info "Syncing commit $SHORT_HASH: $(echo "$MSG" | head -1)"
 
-    # Checkout the specific commit's version of mass-migration
-    git checkout "$HASH" -- "$SUBFOLDER/"
+    # Extract the specific commit's version of mass-migration to a temp directory
+    # (git checkout doesn't remove files that don't exist in that commit)
+    TEMP_DIR=$(mktemp -d)
+    git archive "$HASH" -- "$SUBFOLDER/" | tar -xf - -C "$TEMP_DIR"
 
     # Sync files to secondary repo
     rsync -av --delete $RSYNC_EXCLUDES \
-        "$MAIN_REPO/$SUBFOLDER/" "$SECONDARY_REPO/"
+        "$TEMP_DIR/$SUBFOLDER/" "$SECONDARY_REPO/"
 
-    # Restore main repo to HEAD
-    git checkout HEAD -- "$SUBFOLDER/"
+    # Clean up temp directory
+    rm -rf "$TEMP_DIR"
 
     # Commit in secondary repo
     cd "$SECONDARY_REPO"
