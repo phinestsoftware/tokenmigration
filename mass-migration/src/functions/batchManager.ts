@@ -64,7 +64,7 @@ async function batchManagerHandler(
 
     // Create worker record for this manager
     const workerId = `manager-${uuidv4().substring(0, 8)}`;
-    await createWorkerRecord(workerId, fileId, 'MANAGER');
+    await createWorkerRecord(workerId, fileId, null, 'MANAGER');
 
     let batchNumber = 0;
     let processedTokens = 0;
@@ -81,11 +81,11 @@ async function batchManagerHandler(
         tokenCount: batchTokenIds.length,
       });
 
+      // Create batch record first (required for FK constraint)
+      await createBatchRecord(fileId, batchId, sourceId, batchNumber, totalBatches, batchTokenIds.length);
+
       // Update tokens with batch ID
       await assignTokensToBatch(batchTokenIds, batchId);
-
-      // Create batch record
-      await createBatchRecord(fileId, batchId, sourceId, batchNumber, totalBatches, batchTokenIds.length);
 
       // Insert audit log
       await insertAuditLog(fileId, batchId, AuditMessageCodes.BATCH_CREATED,
@@ -158,13 +158,16 @@ async function createBatchRecord(
   totalBatches: number,
   tokenCount: number
 ): Promise<void> {
+  // Derive FILE_NAME from FILE_ID (e.g., V21.P.20260105.6088 -> V21.P.20260105.6088.input)
+  const fileName = `${fileId}.input`;
+
   await executeQuery(
     `INSERT INTO TOKEN_MIGRATION_BATCH
-     (BATCH_ID, FILE_ID, SOURCE_ID, MIGRATION_TYPE, CONTEXT, STATUS,
+     (BATCH_ID, FILE_ID, FILE_NAME, SOURCE_ID, MIGRATION_TYPE, CONTEXT, STATUS,
       TOTAL_TOKEN_COUNT, BATCH_NUMBER, TOTAL_BATCHES, BATCH_SIZE)
-     VALUES (@batchId, @fileId, @sourceId, 'MASS', 'MONERIS', 'PENDING',
+     VALUES (@batchId, @fileId, @fileName, @sourceId, 'MASS', 'MONERIS', 'PENDING',
              @tokenCount, @batchNumber, @totalBatches, @tokenCount)`,
-    { batchId, fileId, sourceId, tokenCount, batchNumber, totalBatches }
+    { batchId, fileId, fileName, sourceId, tokenCount, batchNumber, totalBatches }
   );
 }
 
@@ -174,13 +177,14 @@ async function createBatchRecord(
 async function createWorkerRecord(
   workerId: string,
   fileId: string,
+  batchId: string | null,
   mode: string
 ): Promise<void> {
   await executeQuery(
     `INSERT INTO TOKEN_MIGRATION_WORKERS
-     (WORKER_ID, FILE_ID, MODE, STATUS, STARTED_AT)
-     VALUES (@workerId, @fileId, @mode, 'RUNNING', GETUTCDATE())`,
-    { workerId, fileId, mode }
+     (WORKER_ID, BATCH_ID, FILE_ID, MODE, STATUS, STARTED_AT)
+     VALUES (@workerId, @batchId, @fileId, @mode, 'RUNNING', GETUTCDATE())`,
+    { workerId, batchId, fileId, mode }
   );
 }
 

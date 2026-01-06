@@ -48,8 +48,8 @@ async function uploadFileHandler(
     // Determine context based on function name (more reliable than path parsing)
     // uploadFileMastercard handles MC responses, uploadFileBilling handles billing input
     const isMastercardResponse = context.functionName === 'uploadFileMastercard' ||
-                                  fileName.includes('.mc.response') ||
-                                  blobPath.includes('mastercard');
+      fileName.includes('.mc.response') ||
+      blobPath.includes('mastercard');
     const contextType = isMastercardResponse ? 'PG' : 'MONERIS';
 
     // Read and decode blob content
@@ -164,12 +164,13 @@ async function loadMonerisTokensToStaging(
     ERROR_CODE: t.errorCode,
     PMR: t.pmr,
     UPDATED_BY: t.updatedBy,
+    USAGE_TYPE: t.usageType,
   }));
 
   const columns = [
     'FILE_ID', 'BATCH_ID', 'MONERIS_TOKEN', 'EXP_DATE', 'ENTITY_ID', 'ENTITY_TYPE', 'ENTITY_STS',
     'CREATION_DATE', 'LAST_USE_DATE', 'TRX_SEQ_NO', 'BUSINESS_UNIT', 'VALIDATION_STATUS',
-    'MIGRATION_STATUS', 'ERROR_CODE', 'PMR', 'UPDATED_BY'
+    'MIGRATION_STATUS', 'ERROR_CODE', 'PMR', 'UPDATED_BY', 'USAGE_TYPE'
   ];
 
   logger.info('Bulk inserting Moneris tokens', { count: rows.length });
@@ -246,23 +247,35 @@ async function handleMastercardResponse(
       MONERIS_TOKEN: staging.monerisToken,
       PG_TOKEN: staging.pgToken,
       CARD_NUMBER_MASKED: staging.cardNumberMasked,
-      CARD_BRAND: staging.cardBrand,
       FIRST_SIX: staging.firstSix,
       LAST_FOUR: staging.lastFour,
       FUNDING_METHOD: staging.fundingMethod,
-      EXP_DATE: staging.expDate,
       EXP_MONTH: staging.expMonth,
       EXP_YEAR: staging.expYear,
-      RESULT: staging.result,
       ERROR_CAUSE: staging.errorCause,
       ERROR_EXPLANATION: staging.errorExplanation,
+      ERROR_FIELD: staging.errorField,
+      ERROR_SUPPORT_CODE: staging.errorSupportCode,
       MIGRATION_STATUS: staging.migrationStatus,
+      NETWORK_TOKEN_STATUS: staging.networkTokenStatus,
+      CC_CARD_BRAND: staging.ccCardBrand,
+      CC_EXP_DATE: staging.ccExpDate,
+      APIOPERATION: staging.apiOperation,
+      PAYMENT_METHOD_TYPE: staging.paymentMethodType,
+      SOURCEOFFUNDS_TYPE: staging.sourceOfFundsType,
+      SOURCEOFFUNDS_NUMBER: staging.sourceOfFundsNumber,
+      MONERIS_EXPIRY_MONTH: staging.monerisExpiryMonth,
+      MONERIS_EXPIRY_YEAR: staging.monerisExpiryYear,
+      MONERIS2PG_MIGRATION_STATUS: staging.moneris2pgMigrationStatus,
     };
   });
 
   const columns = [
-    'FILE_ID', 'MONERIS_TOKEN', 'PG_TOKEN', 'CARD_NUMBER_MASKED', 'CARD_BRAND', 'FIRST_SIX', 'LAST_FOUR',
-    'FUNDING_METHOD', 'EXP_DATE', 'EXP_MONTH', 'EXP_YEAR', 'RESULT', 'ERROR_CAUSE', 'ERROR_EXPLANATION', 'MIGRATION_STATUS'
+    'FILE_ID', 'MONERIS_TOKEN', 'PG_TOKEN', 'CARD_NUMBER_MASKED', 'FIRST_SIX', 'LAST_FOUR',
+    'FUNDING_METHOD', 'EXP_MONTH', 'EXP_YEAR', 'ERROR_CAUSE', 'ERROR_EXPLANATION', 'ERROR_FIELD',
+    'ERROR_SUPPORT_CODE', 'MIGRATION_STATUS', 'NETWORK_TOKEN_STATUS', 'CC_CARD_BRAND', 'CC_EXP_DATE',
+    'APIOPERATION', 'PAYMENT_METHOD_TYPE', 'SOURCEOFFUNDS_TYPE', 'SOURCEOFFUNDS_NUMBER',
+    'MONERIS_EXPIRY_MONTH', 'MONERIS_EXPIRY_YEAR', 'MONERIS2PG_MIGRATION_STATUS'
   ];
 
   fileLogger.info('Bulk inserting PG tokens', { count: rows.length });

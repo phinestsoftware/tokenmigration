@@ -80,6 +80,26 @@ export function validateMonerisToken(token: string): ValidationResult {
 }
 
 /**
+ * Split expiry date (MMYY) into month and year components
+ * Used for splitting EXP_DATE into EXP_DATE_MM and EXP_DATE_YY
+ */
+export interface SplitExpiryDate {
+  mm: string;
+  yy: string;
+}
+
+export function splitExpiryDate(expDate: string | null | undefined): SplitExpiryDate | null {
+  if (!expDate || expDate.length !== 4) {
+    return null;
+  }
+
+  return {
+    mm: expDate.substring(0, 2),
+    yy: expDate.substring(2, 4),
+  };
+}
+
+/**
  * Validate expiry date format (MMYY)
  */
 export function validateExpiryDate(expDate: string | null | undefined): ValidationResult {

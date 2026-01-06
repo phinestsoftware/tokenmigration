@@ -178,18 +178,18 @@ Examples:
     const pgTokens = await pool.request()
       .input('term', `%${searchTerm}%`)
       .query(`
-        SELECT RESULT, COUNT(*) as COUNT
+        SELECT MONERIS2PG_MIGRATION_STATUS, COUNT(*) as COUNT
         FROM PG_TOKENS_STAGING
         WHERE FILE_ID LIKE @term
            OR MONERIS_TOKEN LIKE @term
-        GROUP BY RESULT
+        GROUP BY MONERIS2PG_MIGRATION_STATUS
       `);
 
     if (pgTokens.recordset.length === 0) {
       console.log('  No PG token responses found.');
     } else {
       for (const row of pgTokens.recordset) {
-        console.log(`  ${row.RESULT}: ${row.COUNT}`);
+        console.log(`  ${row.MONERIS2PG_MIGRATION_STATUS || 'NULL'}: ${row.COUNT}`);
       }
     }
 
@@ -205,9 +205,13 @@ Examples:
           m.VALIDATION_STATUS,
           m.MIGRATION_STATUS,
           m.PMR,
+          m.USAGE_TYPE,
+          m.CC_CARD_BRAND as MONERIS_CARD_BRAND,
+          m.ISSUER_NAME,
+          m.CARD_LEVEL,
           p.PG_TOKEN,
-          p.CARD_BRAND,
-          p.RESULT as MC_RESULT
+          p.CC_CARD_BRAND,
+          p.MONERIS2PG_MIGRATION_STATUS as MC_RESULT
         FROM MONERIS_TOKENS_STAGING m
         LEFT JOIN PG_TOKENS_STAGING p ON m.MONERIS_TOKEN = p.MONERIS_TOKEN
         WHERE m.FILE_ID LIKE @term
@@ -222,9 +226,12 @@ Examples:
         console.log(`  Token: ${token.MONERIS_TOKEN}`);
         console.log(`    Validation: ${token.VALIDATION_STATUS}`);
         console.log(`    Migration:  ${token.MIGRATION_STATUS}`);
+        console.log(`    Usage Type: ${token.USAGE_TYPE || 'N/A'}`);
         console.log(`    PMR:        ${token.PMR || 'Not assigned'}`);
         console.log(`    PG Token:   ${token.PG_TOKEN || 'Not received'}`);
-        console.log(`    Card Brand: ${token.CARD_BRAND || 'N/A'}`);
+        console.log(`    Card Brand: ${token.CC_CARD_BRAND || 'N/A'}`);
+        console.log(`    Issuer:     ${token.ISSUER_NAME || 'N/A'}`);
+        console.log(`    Card Level: ${token.CARD_LEVEL || 'N/A'}`);
         console.log(`    MC Result:  ${token.MC_RESULT || 'N/A'}`);
         console.log('');
       }

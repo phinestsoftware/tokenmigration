@@ -4,6 +4,7 @@ import { createLogger, Logger } from '../utils/logger.js';
 import { executeQuery, bulkUpdate, bulkInsertValues } from '../services/database.js';
 import { decodeQueueMessage, BatchWorkerMessage } from '../services/queueService.js';
 import { AuditMessageCodes } from '../models/migrationBatch.js';
+import { lookupBinInfo } from '../services/binLookupService.js';
 
 interface MonerisTokenForMigration {
   ID: number;
@@ -16,11 +17,14 @@ interface MonerisTokenForMigration {
 interface PgTokenForMigration {
   MONERIS_TOKEN: string;
   PG_TOKEN: string;
-  CARD_BRAND: string | null;
   FIRST_SIX: string | null;
   LAST_FOUR: string | null;
   FUNDING_METHOD: string | null;
-  RESULT: string;
+  CC_CARD_BRAND: string | null;
+  CC_EXP_DATE: string | null;
+  PAYMENT_METHOD_TYPE: string | null;
+  SOURCEOFFUNDS_NUMBER: string | null;
+  MONERIS2PG_MIGRATION_STATUS: string;
 }
 
 /**
@@ -117,7 +121,9 @@ async function processMassMigrationBatch(
 
   // Get corresponding PG tokens from MC response
   const pgResult = await executeQuery<PgTokenForMigration>(
-    `SELECT MONERIS_TOKEN, PG_TOKEN, CARD_BRAND, FIRST_SIX, LAST_FOUR, FUNDING_METHOD, RESULT
+    `SELECT MONERIS_TOKEN, PG_TOKEN, FIRST_SIX, LAST_FOUR, FUNDING_METHOD,
+            CC_CARD_BRAND, CC_EXP_DATE, PAYMENT_METHOD_TYPE, SOURCEOFFUNDS_NUMBER,
+            MONERIS2PG_MIGRATION_STATUS
      FROM PG_TOKENS_STAGING
      WHERE FILE_ID = @fileId
        AND MONERIS_TOKEN IN (SELECT MONERIS_TOKEN FROM MONERIS_TOKENS_STAGING WHERE BATCH_ID = @batchId)`,
@@ -133,7 +139,21 @@ async function processMassMigrationBatch(
   logger.info('PG tokens found', { pgTokenCount: pgTokenMap.size });
 
   // Collect updates for bulk operations
-  const successUpdates: { ID: number; MIGRATION_STATUS: string; PMR: string }[] = [];
+  const successUpdates: {
+    ID: number;
+    MIGRATION_STATUS: string;
+    PMR: string;
+    CC_TOKEN: string;
+    CC_EXP_DATE: string | null;
+    CC_CARD_BRAND: string | null;
+    FIRST_SIX: string | null;
+    LAST_FOUR: string | null;
+    PM_TYPE_ID: string | null;
+    PM_STATUS: string;
+    PM_IS_PREF: string;
+    ISSUER_NAME: string | null;
+    CARD_LEVEL: string | null;
+  }[] = [];
   const failureUpdates: { ID: number; MIGRATION_STATUS: string; ERROR_CODE: string }[] = [];
   const errorDetails: {
     FILE_ID: string;
@@ -149,21 +169,37 @@ async function processMassMigrationBatch(
   for (const moneris of monerisTokens) {
     const pgToken = pgTokenMap.get(moneris.MONERIS_TOKEN);
 
-    if (pgToken && pgToken.RESULT === 'SUCCESS' && pgToken.PG_TOKEN) {
-      // Generate PMR
-      const pmr = generatePMR();
+    if (pgToken && pgToken.MONERIS2PG_MIGRATION_STATUS === 'SUCCESS' && pgToken.PG_TOKEN) {
+      // Generate PMR from PG token
+      const pmr = generatePMR(pgToken.PG_TOKEN);
 
-      // Collect success update
+      // Decode Payment Method Type to PM_TYPE_ID
+      const pmTypeId = decodePaymentMethodType(pgToken.PAYMENT_METHOD_TYPE);
+
+      // Lookup BIN information from first 6 digits
+      const binInfo = lookupBinInfo(pgToken.FIRST_SIX);
+
+      // Collect success update with transformed fields
       successUpdates.push({
         ID: moneris.ID,
         MIGRATION_STATUS: 'COMPLETED',
         PMR: pmr,
+        CC_TOKEN: pgToken.PG_TOKEN,
+        CC_EXP_DATE: pgToken.CC_EXP_DATE,
+        CC_CARD_BRAND: pgToken.CC_CARD_BRAND,
+        FIRST_SIX: pgToken.FIRST_SIX,
+        LAST_FOUR: pgToken.LAST_FOUR,
+        PM_TYPE_ID: pmTypeId,
+        PM_STATUS: 'A', // Active status
+        PM_IS_PREF: 'N', // Not preferred by default
+        ISSUER_NAME: binInfo?.issuerName || null,
+        CARD_LEVEL: binInfo?.cardLevel || null,
       });
 
     } else {
       // Collect failure update
       const errorMessage = pgToken
-        ? `MC response: ${pgToken.RESULT}`
+        ? `MC response: ${pgToken.MONERIS2PG_MIGRATION_STATUS}`
         : 'No MC response found';
 
       failureUpdates.push({
@@ -192,7 +228,9 @@ async function processMassMigrationBatch(
       'MONERIS_TOKENS_STAGING',
       'ID',
       successUpdates,
-      ['MIGRATION_STATUS', 'PMR']
+      ['MIGRATION_STATUS', 'PMR', 'CC_TOKEN', 'CC_EXP_DATE', 'CC_CARD_BRAND',
+        'FIRST_SIX', 'LAST_FOUR', 'PM_TYPE_ID', 'PM_STATUS', 'PM_IS_PREF',
+        'ISSUER_NAME', 'CARD_LEVEL']
     );
   }
 
@@ -223,13 +261,34 @@ async function processMassMigrationBatch(
 }
 
 /**
- * Generate PMR (Payment Method Reference)
- * Format: 16 digits starting with 8
+ * Generate PMR (Payment Method Reference) from PG Token
+ * Format: Based on PG_TOKEN with specific encoding
+ * For simplicity, using a hash-based approach
  */
-function generatePMR(): string {
+function generatePMR(pgToken: string): string {
+  // Simple PMR generation: Take PG token and create a derived value
+  // In production, this would use a more sophisticated algorithm
   const timestamp = Date.now().toString().slice(-10);
-  const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
-  return `8${timestamp}${random}`;
+  const tokenHash = pgToken.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const suffix = tokenHash.toString().padStart(5, '0').slice(-5);
+  return `8${timestamp}${suffix}`;
+}
+
+/**
+ * Decode Payment Method Type to PM_TYPE_ID
+ * Maps CREDIT/DEBIT/PREPAID/OTHER to type IDs
+ */
+function decodePaymentMethodType(paymentMethodType: string | null): string | null {
+  if (!paymentMethodType) return null;
+
+  const typeMap: Record<string, string> = {
+    'CREDIT': '1',
+    'DEBIT': '2',
+    'PREPAID': '3',
+    'OTHER': '4',
+  };
+
+  return typeMap[paymentMethodType.toUpperCase()] || null;
 }
 
 /**

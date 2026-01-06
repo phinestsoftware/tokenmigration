@@ -33,22 +33,30 @@ export interface PgTokenStaging {
   monerisToken: string;
   pgToken: string | null;
   cardNumberMasked: string | null;
-  cardBrand: string | null;
   firstSix: string | null;
   lastFour: string | null;
   fundingMethod: string | null;
-  expDate: string | null;
   expMonth: string | null;
   expYear: string | null;
-  result: string | null;
   errorCause: string | null;
   errorExplanation: string | null;
   errorField: string | null;
   errorSupportCode: string | null;
-  schemeTokenStatus: string | null;
   migrationStatus: MigrationStatusType;
   createdAt?: Date;
   updatedAt?: Date;
+  networkTokenStatus?: string | null; // Renamed from schemeTokenStatus
+  ccCardBrand?: string | null; // Replaces cardBrand
+  ccExpDate?: string | null; // Replaces expDate
+  monerisFileId?: number | null;
+  validationStatus?: string | null;
+  apiOperation?: string | null;
+  paymentMethodType?: string | null;
+  sourceOfFundsType?: string | null;
+  sourceOfFundsNumber?: string | null;
+  monerisExpiryMonth?: string | null;
+  monerisExpiryYear?: string | null;
+  moneris2pgMigrationStatus?: string | null; // Replaces result
 }
 
 /**
@@ -67,20 +75,28 @@ export function toPgTokenStaging(
     monerisToken: record.correlationId,
     pgToken: record.token,
     cardNumberMasked: record.cardNumberMasked,
-    cardBrand: mapCardScheme(record.cardScheme),
     firstSix,
     lastFour,
     fundingMethod: record.fundingMethod,
-    expDate: record.expiry,
     expMonth: record.expiryMonth,
     expYear: record.expiryYear,
-    result: record.result,
     errorCause: record.errorCause,
     errorExplanation: record.errorExplanation,
     errorField: record.errorField,
     errorSupportCode: record.errorSupportCode,
-    schemeTokenStatus: record.schemeTokenStatus,
     migrationStatus: record.result === 'SUCCESS' ? 'COMPLETED' : 'FAILED',
+    networkTokenStatus: record.schemeTokenStatus,
+    ccCardBrand: mapCardScheme(record.cardScheme),
+    ccExpDate: record.expiry,
+    monerisFileId: null, // Will be calculated from TOKEN_MIGRATION_BATCH
+    validationStatus: null, // Will be calculated
+    apiOperation: record.apiOperation,
+    paymentMethodType: record.fundingMethod, // CREDIT/DEBIT/PREPAID/OTHER
+    sourceOfFundsType: record.sourceOfFundsType,
+    sourceOfFundsNumber: record.cardNumberMasked,
+    monerisExpiryMonth: record.expiryMonth,
+    monerisExpiryYear: record.expiryYear,
+    moneris2pgMigrationStatus: record.result,
   };
 }
 

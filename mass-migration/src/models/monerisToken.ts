@@ -13,6 +13,7 @@ export interface MonerisTokenRecord {
   lastUseDate: string | null;
   trxSeqNo: string | null;
   businessUnit: string | null;
+  usageType?: string | null;
 }
 
 /**
@@ -38,6 +39,27 @@ export interface MonerisTokenStaging {
   createdAt?: Date;
   updatedAt?: Date;
   updatedBy?: string;
+  cohortId?: string | null;
+  usageType?: string | null;
+  pmTypeId?: string | null;
+  pmStatus?: string | null;
+  ccToken?: string | null;
+  ccExpDate?: string | null;
+  ccCardBrand?: string | null;
+  firstSix?: string | null;
+  lastFour?: string | null;
+  monerisTokenSource?: string | null;
+  pmCreationChannel?: string | null;
+  pmUpdatedChannel?: string | null;
+  issuerName?: string | null;
+  cardLevel?: string | null;
+  entityRefId?: string | null;
+  pmUsageType?: string | null;
+  pmIsPref?: string | null;
+  entityStatus?: string | null;
+  pgInputFile?: string | null;
+  pgExportStatus?: string | null;
+  pgOutFile?: string | null;
 }
 
 /**
@@ -64,6 +86,27 @@ export function toMonerisTokenStaging(
     errorCode: null,
     pmr: null,
     updatedBy: 'SYSTEM',
+    usageType: record.usageType || null,
+    cohortId: null,
+    pmTypeId: null,
+    pmStatus: null,
+    ccToken: null,
+    ccExpDate: null,
+    ccCardBrand: null,
+    firstSix: null,
+    lastFour: null,
+    monerisTokenSource: null,
+    pmCreationChannel: null,
+    pmUpdatedChannel: null,
+    issuerName: null,
+    cardLevel: null,
+    entityRefId: null,
+    pmUsageType: null,
+    pmIsPref: null,
+    entityStatus: null,
+    pgInputFile: null,
+    pgExportStatus: null,
+    pgOutFile: null,
   };
 }
 
@@ -94,6 +137,7 @@ export const MonerisTokenCsvColumns = [
   'LAST_USE_DATE',
   'TRX_SEQ_NO',
   'BUSINESS_UNIT',
+  'USAGE_TYPE',
 ] as const;
 
 /**
@@ -110,6 +154,7 @@ export function mapCsvRowToMonerisToken(row: Record<string, string>): MonerisTok
     lastUseDate: row['LAST_USE_DATE']?.trim() || null,
     trxSeqNo: row['TRX_SEQ_NO']?.trim() || null,
     businessUnit: row['BUSINESS_UNIT']?.trim() || null,
+    usageType: row['USAGE_TYPE']?.trim() || null,
   };
 }
 
