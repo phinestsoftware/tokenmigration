@@ -89,17 +89,21 @@ EOF
 }
 
 # Configuration
-MAIN_REPO="/Users/gurvindersingh/rogers"
+MAIN_REPO="/Users/gurvindersingh/projects/rogers/tokenmigration"
 SECONDARY_REPO="/tmp/mass-migration-repo"
 SECONDARY_REMOTE="https://github.com/phinestsoftware/rogers-mass-migration.git"
 SUBFOLDER="mass-migration"
-LAST_SYNC_FILE="$SECONDARY_REPO/.last-sync-commit"
-LAST_REVERSE_SYNC_FILE="$SECONDARY_REPO/.last-reverse-sync-commit"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LAST_SYNC_FILE="$SCRIPT_DIR/.last-sync-commit"
+LAST_REVERSE_SYNC_FILE="$SCRIPT_DIR/.last-reverse-sync-commit"
 
 # Files/folders to exclude from sync
 EXCLUDES=(
+    ".git"
     "CLAUDE.md"
     "node_modules"
+    "scripts/.last-sync-commit"
+    "scripts/.last-reverse-sync-commit"
     ".terraform"
     "dist"
     "local.settings.json"
@@ -415,9 +419,10 @@ elif [ -f "$LAST_SYNC_FILE" ]; then
     LAST_SYNCED=$(cat "$LAST_SYNC_FILE")
     log_info "Last synced commit: $LAST_SYNCED"
 else
-    # First time sync - get all commits that touched mass-migration
-    LAST_SYNCED=$(cd "$MAIN_REPO" && git log --reverse --format='%H' -- "$SUBFOLDER/" | head -1)^
-    log_info "First sync - starting from beginning"
+    # First time sync - secondary repo was initialized from this commit
+    # (this is the baseline from when rogers-mass-migration was created)
+    LAST_SYNCED="3415672"
+    log_info "First sync - using baseline commit: $LAST_SYNCED (fix issues with flie name)"
 fi
 
 # Get list of commits to sync (oldest first)
