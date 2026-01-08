@@ -23,6 +23,7 @@ __pycache__/
 .env.local
 local.settings.json
 *.local.json
+scripts/.env
 
 # Test coverage
 coverage/
