@@ -442,6 +442,183 @@ az pipelines runs list --pipeline-name "Pipeline-Name" -o table
 | `azure-pipelines.yml` | Pipeline definition |
 | `docs/AZURE-DEVOPS-SETUP.md` | This guide |
 
+## Adding QA and Production Stages
+
+The default pipeline (`azure-pipelines.yml`) only deploys to the Dev environment. For customer deployments, you'll need to add QA and Production stages.
+
+### Prerequisites for Additional Stages
+
+Before adding new stages, ensure you have:
+
+1. **Deployed Infrastructure** for each environment:
+   ```bash
+   # Deploy QA infrastructure
+   cd infra
+   cp terraform.tfvars terraform-qa.tfvars
+   # Edit terraform-qa.tfvars: set environment = "qa"
+   terraform workspace new qa
+   terraform apply -var-file=terraform-qa.tfvars
+
+   # Deploy Prod infrastructure
+   cp terraform.tfvars terraform-prod.tfvars
+   # Edit terraform-prod.tfvars: set environment = "prod"
+   terraform workspace new prod
+   terraform apply -var-file=terraform-prod.tfvars
+   ```
+
+2. **Azure Service Connections** for each environment:
+   ```bash
+   # Create QA service connection
+   az devops service-endpoint azurerm create \
+     --name "Azure-MassMigration-QA" \
+     --azure-rm-service-principal-id "YOUR_SP_ID" \
+     --azure-rm-subscription-id "YOUR_QA_SUBSCRIPTION_ID" \
+     --azure-rm-subscription-name "Your QA Subscription" \
+     --azure-rm-tenant-id "YOUR_TENANT_ID"
+
+   # Create Prod service connection
+   az devops service-endpoint azurerm create \
+     --name "Azure-MassMigration-Prod" \
+     --azure-rm-service-principal-id "YOUR_SP_ID" \
+     --azure-rm-subscription-id "YOUR_PROD_SUBSCRIPTION_ID" \
+     --azure-rm-subscription-name "Your Prod Subscription" \
+     --azure-rm-tenant-id "YOUR_TENANT_ID"
+   ```
+
+3. **Updated Variable Group** with QA/Prod function app names:
+   ```bash
+   az pipelines variable-group variable update \
+     --group-id YOUR_GROUP_ID \
+     --name qaFunctionAppName \
+     --value "func-tokenmigration-qa-xxxxx"
+
+   az pipelines variable-group variable update \
+     --group-id YOUR_GROUP_ID \
+     --name prodFunctionAppName \
+     --value "func-tokenmigration-prod-xxxxx"
+   ```
+
+### Adding QA Stage to Pipeline
+
+Add this stage after the `DeployDev` stage in `azure-pipelines.yml`:
+
+```yaml
+  # ============================================
+  # DEPLOY TO QA (with approval)
+  # ============================================
+  - stage: DeployQA
+    displayName: 'Deploy to QA'
+    dependsOn: DeployDev
+    condition: succeeded()
+
+    jobs:
+      - deployment: DeployToQA
+        displayName: 'Deploy to QA Function App'
+        environment: 'mass-migration-qa'  # Create this environment in Azure DevOps
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: function-app
+
+                - task: AzureFunctionApp@2
+                  displayName: 'Deploy Azure Function'
+                  inputs:
+                    connectedServiceNameARM: 'Azure-MassMigration-QA'
+                    appType: 'functionAppLinux'
+                    appName: '$(qaFunctionAppName)'
+                    package: '$(Pipeline.Workspace)/function-app/$(Build.BuildId).zip'
+                    runtimeStack: 'NODE|20'
+                    deploymentMethod: 'zipDeploy'
+```
+
+### Adding Production Stage to Pipeline
+
+Add this stage after the `DeployQA` stage:
+
+```yaml
+  # ============================================
+  # DEPLOY TO PROD (with approval)
+  # ============================================
+  - stage: DeployProd
+    displayName: 'Deploy to Prod'
+    dependsOn: DeployQA
+    condition: succeeded()
+
+    jobs:
+      - deployment: DeployToProd
+        displayName: 'Deploy to Prod Function App'
+        environment: 'mass-migration-prod'  # Create this environment in Azure DevOps
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: function-app
+
+                - task: AzureFunctionApp@2
+                  displayName: 'Deploy Azure Function'
+                  inputs:
+                    connectedServiceNameARM: 'Azure-MassMigration-Prod'
+                    appType: 'functionAppLinux'
+                    appName: '$(prodFunctionAppName)'
+                    package: '$(Pipeline.Workspace)/function-app/$(Build.BuildId).zip'
+                    runtimeStack: 'NODE|20'
+                    deploymentMethod: 'zipDeploy'
+```
+
+### Setting Up Approval Gates
+
+For QA and Production environments, you should configure approval gates:
+
+1. Go to **Pipelines > Environments** in Azure DevOps
+2. Click on `mass-migration-qa` or `mass-migration-prod`
+3. Click **...** (more options) > **Approvals and checks**
+4. Click **+** > **Approvals**
+5. Add approvers (email addresses)
+6. Configure options:
+   - **Timeout**: How long to wait for approval (e.g., 72 hours)
+   - **Instructions**: Message shown to approvers
+7. Click **Create**
+
+### Environment-Specific Configurations
+
+If QA/Prod need different configurations, you can:
+
+1. **Use separate variable groups**:
+   ```yaml
+   variables:
+     - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+       - group: MassMigration-Variables-Prod
+     - ${{ if ne(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+       - group: MassMigration-Variables-Dev
+   ```
+
+2. **Use stage-specific variables**:
+   ```yaml
+   - stage: DeployProd
+     variables:
+       sqlConnectionString: $(prodSqlConnectionString)
+   ```
+
+### Service Connections Summary
+
+| Environment | Service Connection Name | Purpose |
+|-------------|------------------------|---------|
+| All | `GitHub-MassMigration` | Pull code from GitHub |
+| Dev | `Azure-MassMigration-Dev` | Deploy to Dev Azure resources |
+| QA | `Azure-MassMigration-QA` | Deploy to QA Azure resources |
+| Prod | `Azure-MassMigration-Prod` | Deploy to Prod Azure resources |
+
+**Note**: Each Azure service connection should use a Service Principal with appropriate permissions for that environment. For production, consider using a separate Service Principal with stricter access controls.
+
 ## Support
 
 If you encounter issues not covered in this guide:
