@@ -36,6 +36,7 @@ const envSchema = z.object({
   EMAIL_ENABLED: z.string().transform((val) => val === 'true').default('false'),
   EMAIL_FROM: z.string().optional(),
   EMAIL_TO: z.string().optional(),
+  ACS_CONNECTION_STRING: z.string().optional(),
 
   // Mock Services
   MOCK_MASTERCARD_ENABLED: z.string().transform((val) => val === 'true').default('false'),

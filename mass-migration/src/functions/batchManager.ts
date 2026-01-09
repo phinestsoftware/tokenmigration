@@ -62,9 +62,9 @@ async function batchManagerHandler(
       expectedBatches: Math.ceil(tokenIds.length / batchSize),
     });
 
-    // Create worker record for this manager
+    // Create worker record for this manager (use fileId as batchId for manager workers)
     const workerId = `manager-${uuidv4().substring(0, 8)}`;
-    await createWorkerRecord(workerId, fileId, null, 'MANAGER');
+    await createWorkerRecord(workerId, fileId, fileId, 'MANAGER');
 
     let batchNumber = 0;
     let processedTokens = 0;

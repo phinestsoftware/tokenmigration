@@ -69,6 +69,22 @@ variable "tags" {
   type = map(string)
 }
 
+variable "acs_connection_string" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "email_from_address" {
+  type    = string
+  default = ""
+}
+
+variable "email_to_address" {
+  type    = string
+  default = ""
+}
+
 # App Service Plan
 resource "azurerm_service_plan" "main" {
   name                = "asp-${var.project_name}-${var.environment}"
@@ -145,7 +161,10 @@ resource "azurerm_linux_function_app" "main" {
 
     # Features
     "MOCK_MASTERCARD_ENABLED"        = var.environment != "prod" ? "true" : "false"
-    "EMAIL_ENABLED"                  = var.environment == "prod" ? "true" : "false"
+    "EMAIL_ENABLED"                  = "true"
+    "EMAIL_FROM"                     = var.email_from_address
+    "EMAIL_TO"                       = var.email_to_address
+    "ACS_CONNECTION_STRING"          = var.acs_connection_string
   }
 
   tags = var.tags

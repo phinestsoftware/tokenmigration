@@ -4,11 +4,15 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.85.0"
+      version = "~> 3.116.0"  # Updated for Node 20 support
     }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6.0"
+    }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 1.12.0"
     }
   }
 
@@ -29,6 +33,9 @@ provider "azurerm" {
     }
   }
   skip_provider_registration = true
+}
+
+provider "azapi" {
 }
 
 # Random suffix for globally unique names
@@ -99,6 +106,9 @@ module "function_app" {
   sql_admin_password           = var.sql_admin_password
   application_insights_key     = module.application_insights.instrumentation_key
   application_insights_conn_str = module.application_insights.connection_string
+  acs_connection_string        = module.communication_services.primary_connection_string
+  email_from_address           = module.communication_services.email_from_address
+  email_to_address             = var.email_to
   tags                         = local.common_tags
 }
 
@@ -126,4 +136,15 @@ module "key_vault" {
   sql_connection_string = module.sql_database.connection_string
   storage_connection_string = module.storage.storage_connection_string
   tags                 = local.common_tags
+}
+
+# Communication Services Module
+module "communication_services" {
+  source = "./modules/communication-services"
+
+  resource_group_name = azurerm_resource_group.main.name
+  environment         = var.environment
+  project_name        = var.project_name
+  resource_suffix     = local.resource_suffix
+  tags                = local.common_tags
 }

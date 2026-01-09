@@ -15,7 +15,7 @@ interface MigrationResult {
   ENTITY_TYPE: string | null;
   PMR: string | null;
   PG_TOKEN: string | null;
-  CARD_BRAND: string | null;
+  CC_CARD_BRAND: string | null;
   FIRST_SIX: string | null;
   LAST_FOUR: string | null;
   FUNDING_METHOD: string | null;
@@ -65,7 +65,7 @@ async function generateBillingFileHandler(
           entityId: result.ENTITY_ID,
           entityRefType: result.ENTITY_TYPE,
           pmr: result.PMR,
-          cardBrand: result.CARD_BRAND,
+          cardBrand: result.CC_CARD_BRAND,
           firstSix: result.FIRST_SIX,
           lastFour: result.LAST_FOUR,
           fundingMethod: result.FUNDING_METHOD,
@@ -222,7 +222,7 @@ async function getMigrationResults(
       m.ENTITY_TYPE,
       m.PMR,
       p.PG_TOKEN,
-      p.CARD_BRAND,
+      p.CC_CARD_BRAND,
       p.FIRST_SIX,
       p.LAST_FOUR,
       p.FUNDING_METHOD,

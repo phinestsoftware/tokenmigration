@@ -1,7 +1,17 @@
+import { EmailClient } from '@azure/communication-email';
 import { getConfig } from '../config/index.js';
 import { Logger, createLogger } from '../utils/logger.js';
 
 const logger: Logger = createLogger('EmailService');
+
+/**
+ * Get email recipients as an array (handles comma-separated string from config)
+ */
+function getEmailRecipients(): string[] {
+  const config = getConfig();
+  const emailTo = config.EMAIL_TO ?? '';
+  return emailTo.split(',').map((e) => e.trim()).filter((e) => e.length > 0);
+}
 
 export interface EmailOptions {
   to: string | string[];
@@ -25,8 +35,7 @@ export interface MigrationEmailData {
 }
 
 /**
- * Send email notification
- * In production, this would integrate with SendGrid, Azure Communication Services, or similar
+ * Send email notification using Azure Communication Services
  */
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   const config = getConfig();
@@ -41,26 +50,53 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   }
 
   try {
-    // TODO: Implement actual email sending
-    // Example with SendGrid:
-    // const sgMail = require('@sendgrid/mail');
-    // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    // await sgMail.send({
-    //   to: options.to,
-    //   from: config.EMAIL_FROM,
-    //   subject: options.subject,
-    //   html: options.isHtml ? options.body : undefined,
-    //   text: !options.isHtml ? options.body : undefined,
-    // });
+    // Validate required configuration
+    if (!config.ACS_CONNECTION_STRING) {
+      logger.error('Azure Communication Services connection string not configured');
+      return false;
+    }
 
-    logger.info('Email sent successfully', {
+    if (!config.EMAIL_FROM) {
+      logger.error('EMAIL_FROM not configured');
+      return false;
+    }
+
+    // Initialize Azure Communication Services Email client
+    const emailClient = new EmailClient(config.ACS_CONNECTION_STRING);
+
+    // Prepare recipients
+    const recipients = Array.isArray(options.to) ? options.to : [options.to];
+
+    // Send email using Azure Communication Services
+    const emailMessage = {
+      senderAddress: config.EMAIL_FROM,
+      content: options.isHtml
+        ? {
+            subject: options.subject,
+            html: options.body,
+          }
+        : {
+            subject: options.subject,
+            plainText: options.body,
+          },
+      recipients: {
+        to: recipients.map((email) => ({ address: email })),
+      },
+    };
+
+    const poller = await emailClient.beginSend(emailMessage);
+    const result = await poller.pollUntilDone();
+
+    logger.info('Email sent successfully via Azure Communication Services', {
       to: options.to,
       subject: options.subject,
+      messageId: result.id,
+      status: result.status,
     });
 
     return true;
   } catch (error) {
-    logger.error('Failed to send email', error, {
+    logger.error('Failed to send email via Azure Communication Services', error, {
       to: options.to,
       subject: options.subject,
     });
@@ -90,7 +126,7 @@ To terminate the migration, please contact the operations team.
   `.trim();
 
   return sendEmail({
-    to: getConfig().EMAIL_TO ?? '',
+    to: getEmailRecipients(),
     subject,
     body,
   });
@@ -134,7 +170,7 @@ The response file has been generated and placed in the output folder.
   `.trim();
 
   return sendEmail({
-    to: getConfig().EMAIL_TO ?? '',
+    to: getEmailRecipients(),
     subject,
     body,
   });
@@ -168,7 +204,7 @@ Check the audit logs for more details.
   `.trim();
 
   return sendEmail({
-    to: getConfig().EMAIL_TO ?? '',
+    to: getEmailRecipients(),
     subject,
     body,
   });
@@ -202,7 +238,7 @@ Please review the input file for data quality issues and resubmit.
   `.trim();
 
   return sendEmail({
-    to: getConfig().EMAIL_TO ?? '',
+    to: getEmailRecipients(),
     subject,
     body,
   });

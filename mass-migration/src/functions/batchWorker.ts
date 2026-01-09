@@ -4,7 +4,6 @@ import { createLogger, Logger } from '../utils/logger.js';
 import { executeQuery, bulkUpdate, bulkInsertValues } from '../services/database.js';
 import { decodeQueueMessage, BatchWorkerMessage } from '../services/queueService.js';
 import { AuditMessageCodes } from '../models/migrationBatch.js';
-import { lookupBinInfo } from '../services/binLookupService.js';
 
 interface MonerisTokenForMigration {
   ID: number;
@@ -176,9 +175,6 @@ async function processMassMigrationBatch(
       // Decode Payment Method Type to PM_TYPE_ID
       const pmTypeId = decodePaymentMethodType(pgToken.PAYMENT_METHOD_TYPE);
 
-      // Lookup BIN information from first 6 digits
-      const binInfo = lookupBinInfo(pgToken.FIRST_SIX);
-
       // Collect success update with transformed fields
       successUpdates.push({
         ID: moneris.ID,
@@ -192,8 +188,8 @@ async function processMassMigrationBatch(
         PM_TYPE_ID: pmTypeId,
         PM_STATUS: 'A', // Active status
         PM_IS_PREF: 'N', // Not preferred by default
-        ISSUER_NAME: binInfo?.issuerName || null,
-        CARD_LEVEL: binInfo?.cardLevel || null,
+        ISSUER_NAME: null,
+        CARD_LEVEL: null,
       });
 
     } else {

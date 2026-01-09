@@ -66,3 +66,15 @@ variable "sql_database_max_size_gb" {
   type        = number
   default     = 10
 }
+
+variable "email_from" {
+  description = "Sender email address for notifications"
+  type        = string
+  default     = "lamba.tajinder@gmail.com"
+}
+
+variable "email_to" {
+  description = "Recipient email addresses for notifications (comma-separated)"
+  type        = string
+  default     = "lamba.tajinder@gmail.com,neeraj.kumar@digitalsarthi.ca,vrushali@digitalsarthi.com"
+}
