@@ -40,7 +40,7 @@ stages:
       - job: BuildAndTest
         displayName: 'Build, Lint, Test'
         pool:
-          name: 'Default'  # Self-hosted agent pool
+          name: 'Local-Mac'  # Self-hosted agent pool
 
         steps:
           - checkout: self
@@ -125,7 +125,7 @@ stages:
         displayName: 'Deploy to Dev Function App'
         environment: 'mass-migration-dev'
         pool:
-          name: 'Default'  # Self-hosted agent pool
+          name: 'Local-Mac'  # Self-hosted agent pool
 
         strategy:
           runOnce:
