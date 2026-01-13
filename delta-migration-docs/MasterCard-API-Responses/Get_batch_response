@@ -1,0 +1,6 @@
+"apiOperation","correlationId","customer.email","sourceOfFunds.type","sourceOfFunds.provided.card.number","sourceOfFunds.provided.card.expiry.month","sourceOfFunds.provided.card.expiry.year","result","error.cause","error.explanation","error.field","error.supportCode","error.validationType","token"
+"","AcctNbr1","test@test.com","CARD","512345xxxxxx2346","","","SUCCESS","","","","","","9703796509383554"
+"","AcctNbr2","test2@test.com","CARD","512345xxxxxx2346","","","SUCCESS","","","","","","9703796509383554"
+"","AcctNbr3","test3@test.com","CARD","512345xxxxxx2346","","","SUCCESS","","","","","","9703796509383554"
+"","AcctNbr4","test4@test.com","CARD","512345xxxxxx2346","","","SUCCESS","","","","","","9703796509383554"
+"","AcctNbr5","test5@test.com","CARD","512345xxxxxx2346","","","SUCCESS","","","","","","9703796509383554"

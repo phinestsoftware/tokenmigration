@@ -1,0 +1,549 @@
+{
+	"info": {
+		"_postman_id": "334a0f05-ce5d-480a-a064-614c33c103e2",
+		"name": "Rogers Copy",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "13561493"
+	},
+	"item": [
+		{
+			"name": "Hosted Batch",
+			"item": [
+				{
+					"name": "Operation 0: Submit Batch",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"var date = new Date();",
+									"var batchId = date.getTime().toString();",
+									"postman.setGlobalVariable(\"batchId\", batchId);",
+									"",
+									"sha1 = CryptoJS.SHA1(request.data);",
+									"postman.setGlobalVariable(\"sha1\", sha1);"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain; charset=UTF-8"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "apiOperation,correlationId,customer.email,sourceOfFunds.type,sourceOfFunds.provided.card.number,sourceOfFunds.provided.card.expiry.month,sourceOfFunds.provided.card.expiry.year,result,error.cause,error.explanation,error.field,error.supportCode,error.validationType,token\r\nTOKENIZE,AcctNbr1,test@test.com,CARD,{{fpan}},01,39,,,,,,,\r\nTOKENIZE,AcctNbr2,test2@test.com,CARD,{{fpan}},01,39,,,,,,,\r\nTOKENIZE,AcctNbr3,test3@test.com,CARD,{{fpan}},01,39,,,,,,,\r\nTOKENIZE,AcctNbr4,test4@test.com,CARD,{{fpan}},01,39,,,,,,,\r\nTOKENIZE,AcctNbr5,test5@test.com,CARD,{{fpan}},01,39,,,,,,,"
+						},
+						"url": {
+							"raw": "https://pki.mtf.gateway.mastercard.com/batch/version/{{version}}/merchant/{{merchantId}}/batch/{{batchId}}",
+							"protocol": "https",
+							"host": [
+								"pki",
+								"mtf",
+								"gateway",
+								"mastercard",
+								"com"
+							],
+							"path": [
+								"batch",
+								"version",
+								"{{version}}",
+								"merchant",
+								"{{merchantId}}",
+								"batch",
+								"{{batchId}}"
+							]
+						},
+						"description": "This sends a batch request containing some sample tokenization operations.  Before the command runs, it generates a batch ID based on the current time."
+					},
+					"response": []
+				},
+				{
+					"name": "Operation 1: MIT Recurring",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"var date = new Date();",
+									"var batchId = date.getTime().toString();",
+									"postman.setGlobalVariable(\"batchId\", batchId);",
+									"",
+									"sha1 = CryptoJS.SHA1(request.data);",
+									"postman.setGlobalVariable(\"sha1\", sha1);"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "basic",
+							"basic": [
+								{
+									"key": "password",
+									"value": "{{apiPassword}}",
+									"type": "string"
+								},
+								{
+									"key": "username",
+									"value": "",
+									"type": "string"
+								},
+								{
+									"key": "saveHelperData",
+									"value": true,
+									"type": "boolean"
+								},
+								{
+									"key": "showPassword",
+									"value": false,
+									"type": "boolean"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain; charset=UTF-8"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "merchant,apiPassword,apiOperation,sourceOfFunds.type,sourceOfFunds.token,sourceOfFunds.provided.card.storedOnFile,order.amount,order.currency,order.id,transaction.id,agreement.id,transaction.source,customer.account.id,customer.phone,order.custom.PMR,order.statementDescriptor.name,order.statementDescriptor.phone,result,response.gatewayCode,transaction.authorizationCode,sourceOfFunds.provided.card.number,sourceOfFunds.provided.card.expiry.month,sourceOfFunds.provided.card.expiry.year,sourceOfFunds.provided.card.brand,response.acquirerCode,timeOfRecord,error.cause,error.explanation,error.field,error.supportCode,error.validationType\r\nSBX_FIDO,4a6f55bd663ecf7c09597c4aa4a36b39,PAY,CARD,9703796509383554,STORED,50,CAD,OrdM111119911,trxn1,Agreement1-OrdC1,MERCHANT,12345678901234567890,+1 416 123 4567,8703796509383554,ROGERS*123456789011,2125223414,,,,,,,,,,,,\r\n,,PAY,CARD,9914312063787241,STORED,55.25,CAD,OrdM222229922,trxn1,Agreement2-OrdC2,MERCHANT,12345678901234567890,+1 416 123 4567,8703796509383554,ROGERS*213456789012,9172312345,,,,,,,,,,,,\r\nSBX_FIDO,4a6f55bd663ecf7c09597c4aa4a36b39,PAY,CARD,9680699817394668,STORED,44.99,CAD,OrdM333339933,trxn1,Agreement3-OrdC3,MERCHANT,12345678901234567890,+1 416 123 4567,8703796509383554,ROGERS*312456789013,5165519890,,,,,,,,,,,,\r\n,,PAY,CARD,9186702309398277,STORED,60,CAD,OrdM444449944,trxn1,Agreement4-OrdC4,MERCHANT,12345678901234567890,+1 416 123 4567,8703796509383554,ROGERS*412356789014,9141234567,,,,,,,,,,,,\r\n,,PAY,CARD,9601032526315798,STORED,64.99,CAD,OrdM555559955,trxn1,Agreement5-OrdC5,MERCHANT,12345678901234567890,+1 416 123 4567,8703796509383554,ROGERS*512346789015,5551234567,,,,,,,,,,,,"
+						},
+						"url": {
+							"raw": "https://{{host}}/batch/version/{{version}}/merchant/{{merchantId}}/batch/{{batchId}}",
+							"protocol": "https",
+							"host": [
+								"{{host}}"
+							],
+							"path": [
+								"batch",
+								"version",
+								"{{version}}",
+								"merchant",
+								"{{merchantId}}",
+								"batch",
+								"{{batchId}}"
+							]
+						},
+						"description": "This sends a batch request containing some sample tokenization operations.  Before the command runs, it generates a batch ID based on the current time."
+					},
+					"response": []
+				},
+				{
+					"name": "Operation 1: Migrated MIT Recurring",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"var date = new Date();",
+									"var batchId = date.getTime().toString();",
+									"postman.setGlobalVariable(\"batchId\", batchId);",
+									"",
+									"sha1 = CryptoJS.SHA1(request.data);",
+									"postman.setGlobalVariable(\"sha1\", sha1);"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "basic",
+							"basic": [
+								{
+									"key": "password",
+									"value": "{{apiPassword}}",
+									"type": "string"
+								},
+								{
+									"key": "username",
+									"value": "",
+									"type": "string"
+								},
+								{
+									"key": "saveHelperData",
+									"value": true,
+									"type": "boolean"
+								},
+								{
+									"key": "showPassword",
+									"value": false,
+									"type": "boolean"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain; charset=UTF-8"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "merchant,apiPassword,apiOperation,sourceOfFunds.type,sourceOfFunds.token,sourceOfFunds.provided.card.storedOnFile,order.amount,order.currency,order.id,transaction.id,agreement.id,agreement.type,agreement.amountVariability,agreement.expiryDate,agreement.minimumDaysBetweenPayments,transaction.acquirer.traceId,transaction.source,customer.account.id,customer.phone,order.custom.PMR,order.statementDescriptor.name,order.statementDescriptor.phone,result,response.gatewayCode,transaction.authorizationCode,timeOfrecord,sourceOfFunds.provided.card.number,error.cause,error.explanation,error.field,error.supportCode,error.validationType\r\nSBX_FIDO,4a6f55bd663ecf7c09597c4aa4a36b39,PAY,CARD,9703796509383554,STORED,50,CAD,OrdMM199,trxn1,Agreement1-OrdM1,RECURRING,VARIABLE,2099-12-31,28,MCWNTZKGI0628,INTERNET,12345678901234567890,+1 416 123 4567,8703796509383554,ROGERS*123456789011,2125223414,,,,,,,,,,\r\n,,PAY,CARD,9914312063787241,STORED,55.25,CAD,OrdMM299,trxn1,Agreement2-OrdM2,RECURRING,VARIABLE,2099-12-31,28,MCWNTZKGI0628,INTERNET,12345678901234567890,+1 416 123 4567,8703796509383554,ROGERS*213456789012,9172312345,,,,,,,,,,\r\n,,PAY,CARD,9680699817394668,STORED,44.99,CAD,OrdMM399,trxn1,Agreement3-OrdM3,RECURRING,VARIABLE,2099-12-31,28,MCWNTZKGI0628,INTERNET,12345678901234567890,+1 416 123 4567,8703796509383554,ROGERS*312456789013,5165519890,,,,,,,,,,\r\nSBX_FIDO,4a6f55bd663ecf7c09597c4aa4a36b39,PAY,CARD,9186702309398277,STORED,60,CAD,OrdMM499,trxn1,Agreement4-OrdM4,RECURRING,VARIABLE,2099-12-31,28,1234567890,INTERNET,12345678901234567890,+1 416 123 4567,8703796509383554,ROGERS*412356789014,9141234567,,,,,,,,,,\r\n,,PAY,CARD,9601032526315798,STORED,64.99,CAD,OrdMM599,trxn1,Agreement5-OrdM5,RECURRING,VARIABLE,2099-12-31,28,1234567890,INTERNET,12345678901234567890,+1 416 123 4567,8703796509383554,ROGERS*512346789015,5551234567,,,,,,,,,,"
+						},
+						"url": {
+							"raw": "https://{{host}}/batch/version/{{version}}/merchant/{{merchantId}}/batch/{{batchId}}",
+							"protocol": "https",
+							"host": [
+								"{{host}}"
+							],
+							"path": [
+								"batch",
+								"version",
+								"{{version}}",
+								"merchant",
+								"{{merchantId}}",
+								"batch",
+								"{{batchId}}"
+							]
+						},
+						"description": "This sends a batch request containing some sample tokenization operations.  Before the command runs, it generates a batch ID based on the current time."
+					},
+					"response": []
+				},
+				{
+					"name": "Operation 2: Validate batch request",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain; charset=UTF-8"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{{sha1}}"
+						},
+						"url": {
+							"raw": "https://pki.mtf.gateway.mastercard.com/batch/version/{{version}}/merchant/{{merchantId}}/batch/{{batchId}}/validate",
+							"protocol": "https",
+							"host": [
+								"pki",
+								"mtf",
+								"gateway",
+								"mastercard",
+								"com"
+							],
+							"path": [
+								"batch",
+								"version",
+								"{{version}}",
+								"merchant",
+								"{{merchantId}}",
+								"batch",
+								"{{batchId}}",
+								"validate"
+							]
+						},
+						"description": "This sends a SHA1 digest of the batch request to the server, which allows the batch operation to complete.  This step can be skipped if one would like to see what happens when the batch is retrieved without performing this step."
+					},
+					"response": []
+				},
+				{
+					"name": "Operation 3: Get batch status",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain; charset=UTF-8"
+							}
+						],
+						"url": {
+							"raw": "https://pki.mtf.gateway.mastercard.com/batch/version/{{version}}/merchant/{{merchantId}}/batch/{{batchId}}/status",
+							"protocol": "https",
+							"host": [
+								"pki",
+								"mtf",
+								"gateway",
+								"mastercard",
+								"com"
+							],
+							"path": [
+								"batch",
+								"version",
+								"{{version}}",
+								"merchant",
+								"{{merchantId}}",
+								"batch",
+								"{{batchId}}",
+								"status"
+							]
+						},
+						"description": "This retrieves the status of the batch.  This command can be run without step 2 if one wants to see what happens if the batch is not validated."
+					},
+					"response": []
+				},
+				{
+					"name": "Operation 4: Get batch response",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain; charset=UTF-8"
+							}
+						],
+						"url": {
+							"raw": "https://pki.mtf.gateway.mastercard.com/batch/version/{{version}}/merchant/{{merchantId}}/batch/{{batchId}}/response",
+							"protocol": "https",
+							"host": [
+								"pki",
+								"mtf",
+								"gateway",
+								"mastercard",
+								"com"
+							],
+							"path": [
+								"batch",
+								"version",
+								"{{version}}",
+								"merchant",
+								"{{merchantId}}",
+								"batch",
+								"{{batchId}}",
+								"response"
+							]
+						},
+						"description": "This retrieves the response from the batch."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Create Token (with Card)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = JSON.parse(responseBody);",
+							"postman.setGlobalVariable(\"tokenToDelete\", jsonData.token)"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{  \r\n   \"transaction\":{\r\n    \"currency\":\"CAD\"\r\n   },\r\n   \"sourceOfFunds\": {\r\n   \t\t\"type\": \"CARD\",\r\n   \t\t\"provided\": {\r\n   \t\t\t\"card\": {\r\n   \t\t\t\t\"number\": \"{{fpan}}\",\r\n                \"securityCode\":\"100\",\r\n   \t\t\t\t\"expiry\": {\r\n   \t\t\t\t\t\"month\": \"{{expMonth}}\",\r\n   \t\t\t\t\t\"year\": \"{{expYear}}\"\r\n   \t\t\t\t}\r\n   \t\t\t}\r\n   \t\t}\r\n   }\r\n}"
+				},
+				"url": {
+					"raw": "https://{{host}}/api/rest/version/{{version}}/merchant/{{merchantId}}/token",
+					"protocol": "https",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"api",
+						"rest",
+						"version",
+						"{{version}}",
+						"merchant",
+						"{{merchantId}}",
+						"token"
+					]
+				},
+				"description": "This transaction tokenizes a sample Mastercard using the gateway-generated \"Preserve 6.4\" scheme.  The token is stored in a Postman variable for use in the next operation."
+			},
+			"response": []
+		},
+		{
+			"name": "Create Token with Session",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = JSON.parse(responseBody);",
+							"postman.setGlobalVariable(\"tokenToDelete\", jsonData.token)"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{  \r\n   \"transaction\":{\r\n    \"currency\":\"CAD\"\r\n   },\r\n   \"session\":{\r\n       \"id\":\"{{sessionId}}\"\r\n   }\r\n}"
+				},
+				"url": {
+					"raw": "https://{{host}}/api/rest/version/{{version}}/merchant/{{merchantId}}/token",
+					"protocol": "https",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"api",
+						"rest",
+						"version",
+						"{{version}}",
+						"merchant",
+						"{{merchantId}}",
+						"token"
+					]
+				},
+				"description": "This transaction tokenizes a sample Mastercard using the gateway-generated \"Preserve 6.4\" scheme.  The token is stored in a Postman variable for use in the next operation."
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "basic",
+		"basic": [
+			{
+				"key": "password",
+				"value": "{{apiPassword}}",
+				"type": "string"
+			},
+			{
+				"key": "username",
+				"value": "merchant.{{merchantId}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	]
+}
