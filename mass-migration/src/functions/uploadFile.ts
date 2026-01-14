@@ -72,12 +72,17 @@ async function uploadFileHandler(
     const sourceId = parsedFileName?.sourceId ?? 'UNKNOWN';
     const tokenType = parsedFileName?.tokenType ?? 'P';
 
+    // Create batch record BEFORE validation so rejected files have a record for reporting
+    await createFileBatchRecord(fileId, fileName, sourceId, tokenType, contextType, 0, blobPath, 'VALIDATING');
+
     // Validate file structure
     const expectedColumns = MonerisTokenCsvColumns;
     const validation = validateFileStructure(content, expectedColumns);
 
     if (!validation.isValid) {
       fileLogger.error('File validation failed', undefined, { errors: validation.errors });
+      // Update batch status to REJECTED before logging and throwing
+      await updateBatchStatus(fileId, 'REJECTED');
       await insertAuditLog(fileId, null, AuditMessageCodes.FILE_REJECTED,
         `File validation failed: ${validation.errors.join(', ')}`, { errors: validation.errors });
       throw new Error(`File validation failed: ${validation.errors.join(', ')}`);
@@ -89,8 +94,8 @@ async function uploadFileHandler(
 
     fileLogger.info('File parsed', { recordCount, hasTrailer: !!parseResult.trailer });
 
-    // Create batch record for the file
-    await createFileBatchRecord(fileId, fileName, sourceId, tokenType, contextType, recordCount, blobPath);
+    // Update batch record with token count now that we've parsed the file
+    await updateBatchStatus(fileId, 'PENDING', recordCount);
 
     // Insert audit log
     await insertAuditLog(fileId, null, AuditMessageCodes.FILE_RECEIVED,
@@ -325,7 +330,8 @@ async function createFileBatchRecord(
   tokenType: string,
   context: string,
   tokenCount: number,
-  blobPath: string
+  blobPath: string,
+  status: string = 'PENDING'
 ): Promise<void> {
   await executeQuery(
     `INSERT INTO TOKEN_MIGRATION_BATCH
@@ -341,7 +347,7 @@ async function createFileBatchRecord(
       tokenType,
       migrationType: 'MASS',
       context,
-      status: 'PENDING',
+      status,
       tokenCount,
       blobPath,
     }

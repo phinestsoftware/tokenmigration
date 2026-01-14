@@ -13,7 +13,8 @@ module.exports = {
     '^@services/(.*)$': '<rootDir>/src/services/$1',
     '^@models/(.*)$': '<rootDir>/src/models/$1',
     '^@utils/(.*)$': '<rootDir>/src/utils/$1',
-    '^@config/(.*)$': '<rootDir>/src/config/$1'
+    '^@config/(.*)$': '<rootDir>/src/config/$1',
+    '^(\\.{1,2}/.*)\\.js$': '$1'
   },
   collectCoverageFrom: [
     'src/**/*.ts',
