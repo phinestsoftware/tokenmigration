@@ -211,6 +211,7 @@ async function validateMonerisTokens(
   // Check for duplicates in Payment Hub (existing tokens)
   const existingDuplicates = await checkExistingTokens(fileId, logger);
   duplicateCount += existingDuplicates;
+  validCount -= existingDuplicates; // Decrement validCount since these were initially counted as valid
 
   const totalFailures = invalidCount + duplicateCount;
 
