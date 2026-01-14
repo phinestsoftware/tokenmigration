@@ -4,7 +4,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.100.0"
+      version = "~> 4.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -32,7 +32,8 @@ provider "azurerm" {
       recover_soft_deleted_key_vaults = true
     }
   }
-  skip_provider_registration = true
+  subscription_id             = "23269dfd-5ac9-404c-9964-bfd306b07b6b"
+  resource_provider_registrations = "none"
 }
 
 provider "azapi" {

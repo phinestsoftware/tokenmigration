@@ -68,9 +68,11 @@ export async function triggerMockMastercardResponse(
   // This would trigger the uploadFile function automatically
   const mcResponseContent = generateMockResponseFile(responses);
   const parsedFile = parseFileName(fileId);
+  // Generate unique response filename - use MCRSP prefix to differentiate from input file
+  // This ensures the MC response batch record has a different FILE_ID than the billing input batch
   const responseFileName = parsedFile
-    ? `${parsedFile.sourceId}.${parsedFile.tokenType}.${parsedFile.date}.${parsedFile.sequence}.mc.response`
-    : `${fileId}.mc.response`;
+    ? `MCRSP${parsedFile.sourceId}.${parsedFile.tokenType}.${parsedFile.date}.${parsedFile.sequence}.mc.response`
+    : `MCRSP_${fileId}.mc.response`;
 
   await uploadBlob(
     config.MASTERCARD_MAPPING_CONTAINER,

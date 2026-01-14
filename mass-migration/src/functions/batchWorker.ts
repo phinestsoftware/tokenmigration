@@ -120,14 +120,15 @@ async function processMassMigrationBatch(
   logger.info('Processing batch tokens', { tokenCount: monerisTokens.length });
 
   // Get corresponding PG tokens from MC response
+  // Per DDD: correlationId in MC response = MONERIS_TOKEN, so join ONLY on MONERIS_TOKEN
+  // FILE_ID is not used for join because MC response file can have any name
   const pgResult = await executeQuery<PgTokenForMigration>(
     `SELECT MONERIS_TOKEN, PG_TOKEN, FIRST_SIX, LAST_FOUR, FUNDING_METHOD,
             CC_CARD_BRAND, CC_EXP_DATE, PAYMENT_METHOD_TYPE, SOURCEOFFUNDS_NUMBER,
             MONERIS2PG_MIGRATION_STATUS
      FROM PG_TOKENS_STAGING
-     WHERE FILE_ID = @fileId
-       AND MONERIS_TOKEN IN (SELECT MONERIS_TOKEN FROM MONERIS_TOKENS_STAGING WHERE BATCH_ID = @batchId)`,
-    { fileId, batchId }
+     WHERE MONERIS_TOKEN IN (SELECT MONERIS_TOKEN FROM MONERIS_TOKENS_STAGING WHERE BATCH_ID = @batchId)`,
+    { batchId }
   );
 
   // Create lookup map for PG tokens

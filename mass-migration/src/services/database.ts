@@ -133,8 +133,8 @@ export const SqlTypes = {
   char: (length: number): sql.ISqlType => sql.Char(length),
 };
 
-// Safe chunk size for all bulk operations (100 rows × 20 cols max = 2000 params, under SQL limit of 2100)
-const BULK_CHUNK_SIZE = 100;
+// SQL Server limit is 2100 parameters per query
+const SQL_PARAM_LIMIT = 2100;
 
 /**
  * Bulk UPDATE using a temp table and JOIN
@@ -156,11 +156,15 @@ export async function bulkUpdate<T extends Record<string, unknown>>(
   const connection = await getConnection();
   let totalUpdated = 0;
 
-  logger.info(`Bulk update: ${updates.length} rows in ${tableName}, chunk size ${BULK_CHUNK_SIZE}`);
+  // Calculate safe chunk size: each row uses (1 key + N update columns) parameters
+  const paramsPerRow = 1 + updateColumns.length;
+  const chunkSize = Math.floor(SQL_PARAM_LIMIT / paramsPerRow);
+
+  logger.info(`Bulk update: ${updates.length} rows in ${tableName}, chunk size ${chunkSize}`);
 
   // Process in chunks to avoid parameter limits and memory issues
-  for (let i = 0; i < updates.length; i += BULK_CHUNK_SIZE) {
-    const chunk = updates.slice(i, i + BULK_CHUNK_SIZE);
+  for (let i = 0; i < updates.length; i += chunkSize) {
+    const chunk = updates.slice(i, i + chunkSize);
 
     // Build VALUES clause with parameters
     const valuesClauses: string[] = [];
@@ -225,11 +229,14 @@ export async function bulkInsertValues<T extends Record<string, unknown>>(
   const connection = await getConnection();
   let totalInserted = 0;
 
-  logger.info(`Bulk insert: ${rows.length} rows into ${tableName}, chunk size ${BULK_CHUNK_SIZE}`);
+  // Calculate safe chunk size based on number of columns
+  const chunkSize = Math.floor(SQL_PARAM_LIMIT / columns.length);
+
+  logger.info(`Bulk insert: ${rows.length} rows into ${tableName}, chunk size ${chunkSize}`);
 
   // Process in chunks
-  for (let i = 0; i < rows.length; i += BULK_CHUNK_SIZE) {
-    const chunk = rows.slice(i, i + BULK_CHUNK_SIZE);
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
 
     const valuesClauses: string[] = [];
     const request = connection.request();

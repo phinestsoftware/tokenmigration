@@ -39,17 +39,27 @@ async function batchManagerHandler(
     const batchSize = batchInfoResult.recordset[0]?.BATCH_SIZE ?? config.DEFAULT_BATCH_SIZE;
     const validTokenCount = batchInfoResult.recordset[0]?.VALID_TOKEN_COUNT ?? 0;
 
-    // Get all valid tokens that haven't been assigned to a batch yet
-    const tokensResult = await executeQuery<{ ID: number }>(
-      `SELECT ID FROM MONERIS_TOKENS_STAGING
-       WHERE FILE_ID = @fileId
-         AND VALIDATION_STATUS = 'VALID'
-         AND BATCH_ID IS NULL
-       ORDER BY ID`,
-      { fileId }
+    // Get all valid Moneris tokens that:
+    // 1. Haven't been assigned to a batch yet
+    // 2. Have corresponding PG tokens available (via MONERIS_TOKEN correlation)
+    // Per DDD: correlationId in MC response = MONERIS_TOKEN, so join on MONERIS_TOKEN not FILE_ID
+    const tokensResult = await executeQuery<{ ID: number; MONERIS_FILE_ID: string }>(
+      `SELECT m.ID, m.FILE_ID as MONERIS_FILE_ID
+       FROM MONERIS_TOKENS_STAGING m
+       WHERE m.VALIDATION_STATUS = 'VALID'
+         AND m.BATCH_ID IS NULL
+         AND EXISTS (
+           SELECT 1 FROM PG_TOKENS_STAGING p
+           WHERE p.MONERIS_TOKEN = m.MONERIS_TOKEN
+             AND p.MONERIS2PG_MIGRATION_STATUS = 'SUCCESS'
+         )
+       ORDER BY m.ID`,
+      {}
     );
 
     const tokenIds = tokensResult.recordset.map((r) => r.ID);
+    // Get the actual Moneris FILE_ID (billing input file) for batch creation
+    const monerisFileId = tokensResult.recordset[0]?.MONERIS_FILE_ID ?? fileId;
 
     if (tokenIds.length === 0) {
       logger.info('No tokens to assign to batches');
@@ -60,11 +70,12 @@ async function batchManagerHandler(
       totalTokens: tokenIds.length,
       batchSize,
       expectedBatches: Math.ceil(tokenIds.length / batchSize),
+      monerisFileId,
     });
 
-    // Create worker record for this manager (use fileId as batchId for manager workers)
+    // Create worker record for this manager (use monerisFileId for proper linking)
     const workerId = `manager-${uuidv4().substring(0, 8)}`;
-    await createWorkerRecord(workerId, fileId, fileId, 'MANAGER');
+    await createWorkerRecord(workerId, monerisFileId, monerisFileId, 'MANAGER');
 
     let batchNumber = 0;
     let processedTokens = 0;
@@ -73,7 +84,7 @@ async function batchManagerHandler(
     for (let i = 0; i < tokenIds.length; i += batchSize) {
       batchNumber++;
       const batchTokenIds = tokenIds.slice(i, i + batchSize);
-      const batchId = generateBatchId(fileId, batchNumber);
+      const batchId = generateBatchId(monerisFileId, batchNumber);
 
       logger.info('Creating batch', {
         batchId,
@@ -82,20 +93,20 @@ async function batchManagerHandler(
       });
 
       // Create batch record first (required for FK constraint)
-      await createBatchRecord(fileId, batchId, sourceId, batchNumber, totalBatches, batchTokenIds.length);
+      await createBatchRecord(monerisFileId, batchId, sourceId, batchNumber, totalBatches, batchTokenIds.length);
 
       // Update tokens with batch ID
       await assignTokensToBatch(batchTokenIds, batchId);
 
       // Insert audit log
-      await insertAuditLog(fileId, batchId, AuditMessageCodes.BATCH_CREATED,
+      await insertAuditLog(monerisFileId, batchId, AuditMessageCodes.BATCH_CREATED,
         `Batch ${batchNumber} created with ${batchTokenIds.length} tokens`,
         { batchNumber, tokenCount: batchTokenIds.length });
 
       // Queue batch worker
       const batchWorkerMessage: BatchWorkerMessage = {
         batchId,
-        fileId,
+        fileId: monerisFileId,
         sourceId,
         batchNumber,
         migrationType: 'MASS',
