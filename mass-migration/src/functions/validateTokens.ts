@@ -111,17 +111,20 @@ async function validateMonerisTokens(
     MONERIS_TOKEN: string;
     ENTITY_ID: string | null;
     ERROR_CODE: string | null;
+    ERROR_MESSAGE: string;
     ERROR_TYPE: string;
   }[] = [];
 
   for (const token of tokens) {
     let status = 'VALID';
     let errorCode: string | null = null;
+    let errorMessage: string = '';
 
     // Check for duplicate within file
     if (seenTokens.has(token.MONERIS_TOKEN)) {
       status = 'DUPLICATE';
       errorCode = ValidationErrors.DUPLICATE_TOKEN;
+      errorMessage = 'Duplicate token found in file';
       duplicateCount++;
     } else {
       seenTokens.add(token.MONERIS_TOKEN);
@@ -131,6 +134,7 @@ async function validateMonerisTokens(
       if (!tokenValidation.isValid) {
         status = 'INVALID';
         errorCode = tokenValidation.errorCode ?? null;
+        errorMessage = tokenValidation.errorMessage ?? 'Invalid token format';
         invalidCount++;
       } else {
         // Validate expiry date
@@ -138,6 +142,7 @@ async function validateMonerisTokens(
         if (!expiryValidation.isValid) {
           status = 'INVALID';
           errorCode = expiryValidation.errorCode ?? null;
+          errorMessage = expiryValidation.errorMessage ?? 'Invalid expiry date';
           invalidCount++;
         } else {
           // Validate entity type
@@ -145,6 +150,7 @@ async function validateMonerisTokens(
           if (!entityTypeValidation.isValid) {
             status = 'INVALID';
             errorCode = entityTypeValidation.errorCode ?? null;
+            errorMessage = entityTypeValidation.errorMessage ?? 'Invalid entity type';
             invalidCount++;
           } else {
             // Validate entity status
@@ -152,6 +158,7 @@ async function validateMonerisTokens(
             if (!entityStatusValidation.isValid) {
               status = 'INVALID';
               errorCode = entityStatusValidation.errorCode ?? null;
+              errorMessage = entityStatusValidation.errorMessage ?? 'Invalid entity status';
               invalidCount++;
             } else {
               validCount++;
@@ -176,6 +183,7 @@ async function validateMonerisTokens(
         MONERIS_TOKEN: token.MONERIS_TOKEN,
         ENTITY_ID: token.ENTITY_ID,
         ERROR_CODE: errorCode,
+        ERROR_MESSAGE: errorMessage,
         ERROR_TYPE: 'VALIDATION',
       });
     }
@@ -195,7 +203,7 @@ async function validateMonerisTokens(
     logger.info('Bulk inserting validation errors', { count: errorDetails.length });
     await bulkInsertValues(
       'MIGRATION_ERROR_DETAILS',
-      ['FILE_ID', 'BATCH_ID', 'MONERIS_TOKEN', 'ENTITY_ID', 'ERROR_CODE', 'ERROR_TYPE'],
+      ['FILE_ID', 'BATCH_ID', 'MONERIS_TOKEN', 'ENTITY_ID', 'ERROR_CODE', 'ERROR_MESSAGE', 'ERROR_TYPE'],
       errorDetails
     );
   }
