@@ -222,6 +222,55 @@ node scripts/verify-migration.js 9750
 node scripts/verify-migration.js FILE_1234567890
 ```
 
+### Query Database for Debugging
+Use `scripts/query-db.js` to investigate bugs by querying the database directly:
+
+```bash
+# Get token details for a file
+node scripts/query-db.js tokens V21.P.20260114.0001
+
+# Get validation/migration status summary
+node scripts/query-db.js status V21.P.20260114.0001
+
+# Get error details
+node scripts/query-db.js errors V21.P.20260114.0001
+
+# Get audit log trail
+node scripts/query-db.js audit V21.P.20260114.0001
+
+# Get duplicate tokens
+node scripts/query-db.js duplicates V21.P.20260114.0001
+
+# Get batch info
+node scripts/query-db.js batch V21.P.20260114.0001
+
+# Get PG tokens from Mastercard response
+node scripts/query-db.js pg-tokens V21.P.20260114.0001
+
+# Get recent batches (no parameter needed)
+node scripts/query-db.js recent-batches
+
+# Check PMR mapping for a specific token
+node scripts/query-db.js pmr-mapping 9518050018246830
+
+# Run custom SQL query
+node scripts/query-db.js custom "SELECT TOP 10 * FROM MONERIS_TOKENS_STAGING WHERE VALIDATION_STATUS = 'INVALID'"
+```
+
+**Available queries:**
+| Query | Description |
+|-------|-------------|
+| `tokens` | Get first 20 tokens for a FILE_ID with validation/migration status |
+| `status` | Summary counts grouped by VALIDATION_STATUS and MIGRATION_STATUS |
+| `errors` | Error details from MIGRATION_ERROR_DETAILS table |
+| `audit` | Audit log entries in chronological order |
+| `duplicates` | Tokens marked as DUPLICATE |
+| `batch` | Batch records from TOKEN_MIGRATION_BATCH |
+| `pg-tokens` | PG tokens from Mastercard response |
+| `recent-batches` | Last 20 batch records (no parameter needed) |
+| `pmr-mapping` | Check PMR_MONERIS_MAPPING for a Moneris token |
+| `custom` | Run any custom SQL query |
+
 ### Common Testing Mistakes to Avoid
 1. **Wrong upload path** - Always use `billing-input/{source}/filename` not `billing-input/filename`
 2. **Permission errors with `--auth-mode login`** - Use connection string instead (the script handles this)
