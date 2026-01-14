@@ -3,6 +3,23 @@
 ## Project Overview
 Azure Functions-based token migration service for Rogers. Processes billing files containing Moneris tokens and migrates them to Payment Hub with PG tokens from Mastercard.
 
+## Design Documents
+
+### High Level Design (HLD)
+- **Location:** `/Users/gurvindersingh/projects/rogers/tokenmigration/docs/High+Level+Design+Document+for+Payment+Modernization+Token+Migration-YDDev1.doc.docx`
+- **Description:** Overall architecture, use cases, data flow diagrams, and infrastructure requirements for the entire token migration solution
+- **Key sections:** Solution Summary (section 1.3), Use Cases (section 1.4), Data Architecture (section 2.5), Azure Functions overview (section 3.6.1)
+
+### Detailed Design Document (DDD)
+- **Location:** `/Users/gurvindersingh/projects/rogers/tokenmigration/docs/deatiled_design_mass-migration_Jan13_2026.md`
+- **Description:** Technical implementation details specific to the mass-migration Azure Functions project
+- **Key sections:**
+  - Token File Processor functions (Upload File, Validate Tokens, Create Batch)
+  - Token Processor functions (fileGen, BatchManager, BatchWorker)
+  - Input/output file formats and validation rules
+  - Error handling and test scenarios
+- **Note:** Large file (~510KB) - use grep/search to find specific sections
+
 ## Debugging Best Practices
 
 ### IMPORTANT: Always Check Error Logs First!

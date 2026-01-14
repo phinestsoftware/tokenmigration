@@ -186,6 +186,7 @@ async function loadMonerisTokensToStaging(
 /**
  * Handle Mastercard response file processing using BULK INSERT
  * Parses the MC response CSV and inserts PG tokens to staging
+ * Per DDD: "Assign File id to the uploaded tokens and insert record to: TOKEN_MIGRATION_BATCH"
  */
 async function handleMastercardResponse(
   fileName: string,
@@ -196,34 +197,25 @@ async function handleMastercardResponse(
   let fileId: string = '';
   const baseFileName = fileName.replace('.mc.response', '');
 
-  // First, try to parse the filename to get the proper file ID
-  const parsedName = parseFileName(baseFileName);
-  if (parsedName) {
-    // Construct the expected file ID from parsed components
-    fileId = `${parsedName.sourceId}.${parsedName.tokenType}.${parsedName.date}.${parsedName.sequence}`;
-    logger.info('Parsed MC response filename', { fileName, fileId, parsedName });
+  // Parse the filename to get metadata
+  // For MC response files like V21.P.20260114.0001.mc.response, after stripping .mc.response
+  // we get V21.P.20260114.0001 - we need to parse this directly
+  let sourceId = 'UNKNOWN';
+  let tokenType = 'P';
+
+  // Try to parse the MC response base filename (SOURCE.TYPE.DATE.SEQ format without extension)
+  const mcResponseMatch = baseFileName.match(/^([A-Z0-9]+)\.([PTI])\.(\d{8})\.(\d{4})$/i);
+  if (mcResponseMatch) {
+    sourceId = mcResponseMatch[1].toUpperCase();
+    tokenType = mcResponseMatch[2].toUpperCase();
+    const date = mcResponseMatch[3];
+    const sequence = mcResponseMatch[4];
+    fileId = `${sourceId}.${tokenType}.${date}.${sequence}`;
+    logger.info('Parsed MC response filename', { fileName, fileId, sourceId, tokenType });
   } else if (fileName.startsWith('FILE_')) {
     // Format: FILE_1234567890.mc.response (legacy/fallback format)
     fileId = baseFileName;
-    logger.warn('MC response uses FILE_ format, attempting database lookup', { fileName });
-
-    // Try to find the corresponding batch by looking for recent batches
-    const result = await executeQuery(
-      `SELECT TOP 1 FILE_ID, SOURCE_ID, TOKEN_TYPE FROM TOKEN_MIGRATION_BATCH
-       WHERE CREATED_AT >= DATEADD(hour, -24, GETUTCDATE())
-       ORDER BY CREATED_AT DESC`,
-      {}
-    );
-    const firstRow = result.recordset[0] as { FILE_ID?: string; SOURCE_ID?: string; TOKEN_TYPE?: string } | undefined;
-    if (firstRow?.FILE_ID) {
-      logger.info('Found recent batch, using its FILE_ID', {
-        originalFileId: fileId,
-        correctedFileId: firstRow.FILE_ID,
-        sourceId: firstRow.SOURCE_ID,
-        tokenType: firstRow.TOKEN_TYPE
-      });
-      fileId = firstRow.FILE_ID;
-    }
+    logger.warn('MC response uses FILE_ format', { fileName });
   } else {
     // Fallback: use the filename itself
     logger.warn('Could not parse MC response filename, using as-is', { fileName, baseFileName });
@@ -239,9 +231,14 @@ async function handleMastercardResponse(
 
   fileLogger.info('MC response parsed', { recordCount });
 
+  // Per DDD: "Assign File id to the uploaded tokens and insert record to: TOKEN_MIGRATION_BATCH"
+  // Create batch record for MC response file (Bug #43 fix)
+  const blobPath = `mastercard-mapping/${fileName}`;
+  await createFileBatchRecord(fileId, fileName, sourceId, tokenType, 'PG', recordCount, blobPath, 'PROCESSING');
+
   // Insert audit log
   await insertAuditLog(fileId, null, 'MC_RESP_RECV',
-    `Mastercard response received: ${fileName}`, { recordCount });
+    `Mastercard response received: ${fileName}`, { recordCount, sourceId, tokenType });
 
   // Map to bulk insert format
   const rows = parseResult.records.map((row) => {
@@ -292,32 +289,19 @@ async function handleMastercardResponse(
     `Mastercard response loaded: ${insertedCount} tokens`, { insertedCount });
 
   // Now that PG tokens are loaded, queue batch manager to start processing
-  // This is the correct point to start batch processing - after MC response is available
-  const batchResult = await executeQuery<{ SOURCE_ID: string; TOTAL_BATCHES: number }>(
-    `SELECT SOURCE_ID, TOTAL_BATCHES FROM TOKEN_MIGRATION_BATCH
-     WHERE FILE_ID = @fileId AND BATCH_ID = @fileId`,
-    { fileId }
-  );
+  // Since we created the batch record above, we have all the info we need
+  const batchManagerMessage: BatchManagerMessage = {
+    fileId,
+    sourceId,
+    totalBatches: 1, // Initial value, will be recalculated by createBatch function
+  };
 
-  if (batchResult.recordset.length > 0) {
-    const { SOURCE_ID: sourceId, TOTAL_BATCHES: totalBatches } = batchResult.recordset[0];
-
-    const batchManagerMessage: BatchManagerMessage = {
-      fileId,
-      sourceId,
-      totalBatches: totalBatches ?? 1,
-    };
-
-    await queueBatchManager(batchManagerMessage);
-    fileLogger.info('PG tokens loaded, queued for batch management', {
-      fileId,
-      sourceId,
-      totalBatches,
-      pgTokenCount: insertedCount
-    });
-  } else {
-    fileLogger.warn('No batch record found for fileId, cannot queue batch manager', { fileId });
-  }
+  await queueBatchManager(batchManagerMessage);
+  fileLogger.info('PG tokens loaded, queued for batch management', {
+    fileId,
+    sourceId,
+    pgTokenCount: insertedCount
+  });
 }
 
 /**

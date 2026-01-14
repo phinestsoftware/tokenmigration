@@ -2,6 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Design Documents
+
+### High Level Design (HLD)
+- **Location:** `docs/High+Level+Design+Document+for+Payment+Modernization+Token+Migration-YDDev1.doc.docx`
+- **Description:** Overall architecture, use cases, data flow diagrams, and infrastructure requirements for the entire token migration solution
+- **Key sections:** Solution Summary, Use Cases (UC-01 to UC-12), Data Architecture, Security Architecture, Azure Functions overview
+
+### Detailed Design Document (DDD) - Mass Migration
+- **Location:** `docs/deatiled_design_mass-migration_Jan13_2026.md`
+- **Description:** Technical implementation details for the mass-migration Azure Functions project
+- **Key sections:** Token File Processor functions, Token Processor functions, file formats, validation rules, error handling
+- **Note:** Large file (~510KB) - use grep/search to find specific sections
+
+### Other Documents
+- **Project Summary:** `docs/PROJECT_SUMMARY.md`
+- **Sample Execution Flow:** `docs/Sample Wave 1 Execution Flow.xlsx`
+- **Payment Method Table Design:** `docs/PaymentMethod_Table_design.local.xlsx`
+
 ## Repository Overview
 
 This repository contains a collection of Spring Boot microservices for Rogers Cash & Credit integration (CDE - Cardholder Data Environment). The services handle payment tokenization, batch processing, and vault provider integration.

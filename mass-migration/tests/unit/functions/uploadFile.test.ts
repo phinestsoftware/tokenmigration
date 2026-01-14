@@ -236,3 +236,148 @@ describe('uploadFile - Batch record creation for rejected files', () => {
     });
   });
 });
+
+/**
+ * Bug #43: TOKEN_MIGRATION_BATCH should be created for Mastercard response files
+ * Per DDD: "Assign File id to the uploaded tokens and insert record to: TOKEN_MIGRATION_BATCH"
+ * This applies to BOTH Moneris files AND Mastercard response files
+ */
+describe('uploadFile - Bug #43: MC response should create its own batch record', () => {
+  let dbCalls: Array<{ query: string; params: Record<string, unknown> }> = [];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    dbCalls = [];
+
+    // Capture all database calls
+    (executeQuery as jest.Mock).mockImplementation((query: string, params: Record<string, unknown>) => {
+      dbCalls.push({ query, params });
+      // Return empty result for SELECT queries
+      return Promise.resolve({ recordset: [], rowsAffected: [1] });
+    });
+  });
+
+  /**
+   * Helper to create a mock InvocationContext for MC response files
+   */
+  function createMcResponseContext(fileName: string): InvocationContext {
+    return {
+      functionName: 'uploadFileMastercard',
+      triggerMetadata: {
+        name: `mastercard-mapping/${fileName}`,
+        uri: `https://storage.blob.core.windows.net/mastercard-mapping/${fileName}`,
+      },
+      invocationId: 'test-invocation-id',
+      log: jest.fn(),
+      trace: jest.fn(),
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    } as unknown as InvocationContext;
+  }
+
+  /**
+   * Helper to get batch inserts
+   */
+  function getBatchInserts(): Array<{ query: string; params: Record<string, unknown> }> {
+    return dbCalls.filter(call =>
+      call.query.includes('INSERT INTO TOKEN_MIGRATION_BATCH')
+    );
+  }
+
+  /**
+   * Sample MC response CSV content
+   */
+  function createMcResponseCsv(): string {
+    return [
+      'apiOperation,correlationId,sourceOfFunds.type,sourceOfFunds.provided.card.number,sourceOfFunds.provided.card.expiry.month,sourceOfFunds.provided.card.expiry.year,result,error.cause,error.explanation,error.field,error.supportCode,error.validationType,token,schemeToken.status,sourceOfFunds.provided.card.fundingMethod,sourceOfFunds.provided.card.expiry,sourceOfFunds.provided.card.scheme',
+      ',9518050018246830,CARD,411111******1111,,,SUCCESS,,,,,9876543210123456,ACTIVE,CREDIT,1226,VISA',
+      ',9518050018246831,CARD,555555******4444,,,SUCCESS,,,,,9876543210123457,ACTIVE,CREDIT,0627,MASTERCARD',
+    ].join('\n');
+  }
+
+  describe('When processing MC response file with standard naming', () => {
+    it('should create a TOKEN_MIGRATION_BATCH record for the MC response file', async () => {
+      const mcResponseCsv = createMcResponseCsv();
+      const blob = Buffer.from(mcResponseCsv);
+      // Standard naming: SOURCE.TYPE.DATE.SEQ.mc.response
+      const context = createMcResponseContext('V21.P.20260114.0001.mc.response');
+
+      await uploadFileHandler(blob, context);
+
+      // Bug #43: MC response file should create its own batch record
+      const batchInserts = getBatchInserts();
+      expect(batchInserts.length).toBeGreaterThan(0);
+
+      // Verify the batch record has correct attributes
+      const batchInsert = batchInserts[0];
+      expect(batchInsert).toBeDefined();
+      expect(batchInsert.params.context).toBe('PG');
+      expect(batchInsert.params.fileName).toContain('mc.response');
+    });
+
+    it('should have SOURCE_ID parsed from MC response filename', async () => {
+      const mcResponseCsv = createMcResponseCsv();
+      const blob = Buffer.from(mcResponseCsv);
+      const context = createMcResponseContext('V21.P.20260114.0002.mc.response');
+
+      await uploadFileHandler(blob, context);
+
+      const batchInserts = getBatchInserts();
+      expect(batchInserts.length).toBeGreaterThan(0);
+
+      // Bug #43: SOURCE_ID should be parsed from filename, not null
+      const batchInsert = batchInserts[0];
+      expect(batchInsert.params.sourceId).toBe('V21');
+    });
+
+    it('should have TOKEN_TYPE parsed from MC response filename', async () => {
+      const mcResponseCsv = createMcResponseCsv();
+      const blob = Buffer.from(mcResponseCsv);
+      const context = createMcResponseContext('WINM.P.20260114.0003.mc.response');
+
+      await uploadFileHandler(blob, context);
+
+      const batchInserts = getBatchInserts();
+      expect(batchInserts.length).toBeGreaterThan(0);
+
+      // Bug #43: TOKEN_TYPE should be parsed from filename, not null
+      const batchInsert = batchInserts[0];
+      expect(batchInsert.params.tokenType).toBe('P');
+    });
+
+    it('should have FILE_NAME set to the actual MC response filename', async () => {
+      const mcResponseCsv = createMcResponseCsv();
+      const blob = Buffer.from(mcResponseCsv);
+      const mcFileName = 'TSC.P.20260114.0004.mc.response';
+      const context = createMcResponseContext(mcFileName);
+
+      await uploadFileHandler(blob, context);
+
+      const batchInserts = getBatchInserts();
+      expect(batchInserts.length).toBeGreaterThan(0);
+
+      // Bug #43: FILE_NAME should be the MC response filename
+      const batchInsert = batchInserts[0];
+      expect(batchInsert.params.fileName).toBe(mcFileName);
+    });
+  });
+
+  describe('When processing MC response file with FILE_ format (legacy)', () => {
+    it('should create a TOKEN_MIGRATION_BATCH record even for FILE_ format', async () => {
+      const mcResponseCsv = createMcResponseCsv();
+      const blob = Buffer.from(mcResponseCsv);
+      const context = createMcResponseContext('FILE_1705123456789.mc.response');
+
+      await uploadFileHandler(blob, context);
+
+      // Bug #43: Even legacy FILE_ format should create a batch record
+      const batchInserts = getBatchInserts();
+      expect(batchInserts.length).toBeGreaterThan(0);
+
+      const batchInsert = batchInserts[0];
+      expect(batchInsert.params.context).toBe('PG');
+    });
+  });
+});
