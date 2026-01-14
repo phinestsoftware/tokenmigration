@@ -95,6 +95,16 @@ async function fileGenHandler(
       { fileId, blobPath: `${config.MASTERCARD_INPUT_CONTAINER}/${mcFileName}` }
     );
 
+    // Update MONERIS_TOKENS_STAGING with PG_OUT_FILE for all valid tokens in this file
+    await executeQuery(
+      `UPDATE MONERIS_TOKENS_STAGING
+       SET PG_OUT_FILE = @pgOutFile, UPDATED_AT = GETUTCDATE()
+       WHERE FILE_ID = @fileId AND VALIDATION_STATUS = 'VALID'`,
+      { fileId, pgOutFile: mcFileName }
+    );
+
+    logger.info('Updated PG_OUT_FILE for Moneris tokens', { fileId, pgOutFile: mcFileName });
+
     // Insert audit log
     await insertAuditLog(fileId, null, AuditMessageCodes.OUTPUT_GENERATED,
       `MC input file generated: ${mcFileName}`,

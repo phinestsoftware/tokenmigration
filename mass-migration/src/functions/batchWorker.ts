@@ -11,6 +11,7 @@ interface MonerisTokenForMigration {
   EXP_DATE: string | null;
   ENTITY_ID: string | null;
   ENTITY_TYPE: string | null;
+  LAST_USE_DATE: Date | null;
 }
 
 interface PgTokenForMigration {
@@ -108,7 +109,7 @@ async function processMassMigrationBatch(
 ): Promise<void> {
   // Get Moneris tokens for this batch
   const monerisResult = await executeQuery<MonerisTokenForMigration>(
-    `SELECT ID, MONERIS_TOKEN, EXP_DATE, ENTITY_ID, ENTITY_TYPE
+    `SELECT ID, MONERIS_TOKEN, EXP_DATE, ENTITY_ID, ENTITY_TYPE, LAST_USE_DATE
      FROM MONERIS_TOKENS_STAGING
      WHERE BATCH_ID = @batchId`,
     { batchId }
@@ -164,16 +165,37 @@ async function processMassMigrationBatch(
     ERROR_TYPE: string;
   }[] = [];
 
+  // Collect Payment Hub records for bulk insert
+  const paymentHubRecords: PaymentHubRecords = {
+    paymentMethods: [],
+    tokenizedCards: [],
+    entityDetails: [],
+    entityPmrMappings: [],
+    pmrMonerisMappings: [],
+  };
+
+  const now = new Date();
+
   // Process each token - collect updates but don't execute individually
   for (const moneris of monerisTokens) {
     const pgToken = pgTokenMap.get(moneris.MONERIS_TOKEN);
 
     if (pgToken && pgToken.MONERIS2PG_MIGRATION_STATUS === 'SUCCESS' && pgToken.PG_TOKEN) {
-      // Generate PMR from PG token
+      // Generate PMR from PG token (9→8 first digit swap)
       const pmr = generatePMR(pgToken.PG_TOKEN);
 
       // Decode Payment Method Type to PM_TYPE_ID
       const pmTypeId = decodePaymentMethodType(pgToken.PAYMENT_METHOD_TYPE);
+      const pmTypeIdNum = pmTypeId ? parseInt(pmTypeId, 10) : 1;
+
+      // Extract FIRST_SIX and LAST_FOUR from SOURCEOFFUNDS_NUMBER if not already present
+      let firstSix = pgToken.FIRST_SIX;
+      let lastFour = pgToken.LAST_FOUR;
+      if ((!firstSix || !lastFour) && pgToken.SOURCEOFFUNDS_NUMBER) {
+        const extracted = extractCardDigits(pgToken.SOURCEOFFUNDS_NUMBER);
+        firstSix = firstSix || extracted.firstSix;
+        lastFour = lastFour || extracted.lastFour;
+      }
 
       // Collect success update with transformed fields
       successUpdates.push({
@@ -183,14 +205,75 @@ async function processMassMigrationBatch(
         CC_TOKEN: pgToken.PG_TOKEN,
         CC_EXP_DATE: pgToken.CC_EXP_DATE,
         CC_CARD_BRAND: pgToken.CC_CARD_BRAND,
-        FIRST_SIX: pgToken.FIRST_SIX,
-        LAST_FOUR: pgToken.LAST_FOUR,
+        FIRST_SIX: firstSix,
+        LAST_FOUR: lastFour,
         PM_TYPE_ID: pmTypeId,
         PM_STATUS: 'A', // Active status
         PM_IS_PREF: 'N', // Not preferred by default
         ISSUER_NAME: null,
         CARD_LEVEL: null,
       });
+
+      // Collect Payment Hub records
+      // 1. PAYMENT_METHOD
+      paymentHubRecords.paymentMethods.push({
+        PMR: pmr,
+        PM_TYPE_ID: pmTypeIdNum,
+        PM_STATUS: 'A',
+        PAR: null,
+        PM_CREATION_DATE: now,
+        PM_LAST_UPDATED: now,
+        PM_LAST_USE_DATE: moneris.LAST_USE_DATE,
+        PM_CREATION_CHANNEL: 'MIGRATION',
+        PM_UPDATED_CHANNEL: 'MIGRATION',
+        INITIAL_TXN_ID: null,
+      });
+
+      // 5. PMR_MONERIS_MAPPING
+      paymentHubRecords.pmrMonerisMappings.push({
+        PMR: pmr,
+        MONERIS_TOKEN: moneris.MONERIS_TOKEN,
+        PG_TOKEN: pgToken.PG_TOKEN,
+        CREATION_DATE: now,
+      });
+
+      // 2. TOKENIZED_CARD
+      paymentHubRecords.tokenizedCards.push({
+        CC_TOKEN: pgToken.PG_TOKEN,
+        PMR: pmr,
+        CC_EXP_DATE: pgToken.CC_EXP_DATE,
+        CC_CARD_BRAND: pgToken.CC_CARD_BRAND,
+        FIRST_SIX: firstSix,
+        LAST_FOUR: lastFour,
+        ISSUER_NAME: null,
+        CARD_LEVEL: null,
+      });
+
+      // 3. ENTITY_DETAILS (if entity info available)
+      if (moneris.ENTITY_ID) {
+        const entityRefId = decodeEntityRefId(moneris.ENTITY_TYPE);
+        paymentHubRecords.entityDetails.push({
+          ENTITY_ID: moneris.ENTITY_ID,
+          ENTITY_REF_ID: entityRefId || 1,
+          ENTITY_VALUE: moneris.ENTITY_ID,
+          APPLICATION_INDICATOR: 'BILLING',
+          SYSTEM_INDICATOR: 'MONERIS',
+          ENTITY_CREATION_DATE: now,
+          ENTITY_LAST_UPDATED: now,
+          PM_USAGE_TYPE: null,
+        });
+
+        // 4. ENTITY_PMR_MAPPING
+        paymentHubRecords.entityPmrMappings.push({
+          ENTITY_ID: moneris.ENTITY_ID,
+          PMR: pmr,
+          PM_USAGE_TYPE: null,
+          PM_IS_PREF: 'N',
+          ENTITY_STATUS: 'A',
+          ENTITY_CREATION_DATE: now,
+          ENTITY_LAST_UPDATED: now,
+        });
+      }
 
     } else {
       // Collect failure update
@@ -217,7 +300,7 @@ async function processMassMigrationBatch(
     }
   }
 
-  // Execute bulk updates
+  // Execute bulk updates for MONERIS_TOKENS_STAGING
   if (successUpdates.length > 0) {
     logger.info('Bulk updating successful tokens', { count: successUpdates.length });
     await bulkUpdate(
@@ -250,24 +333,38 @@ async function processMassMigrationBatch(
     );
   }
 
+  // Populate Payment Hub tables
+  if (successUpdates.length > 0) {
+    logger.info('Populating Payment Hub tables');
+    await populatePaymentHub(paymentHubRecords, logger);
+  }
+
   logger.info('Batch processing completed', {
     successCount: successUpdates.length,
     failureCount: failureUpdates.length,
+    paymentMethodsCreated: paymentHubRecords.paymentMethods.length,
+    tokenizedCardsCreated: paymentHubRecords.tokenizedCards.length,
   });
 }
 
 /**
  * Generate PMR (Payment Method Reference) from PG Token
- * Format: Based on PG_TOKEN with specific encoding
- * For simplicity, using a hash-based approach
+ * PMR is derived by replacing the first digit from 9 to 8
+ * Example: 9703796509383554 → 8703796509383554
  */
 function generatePMR(pgToken: string): string {
-  // Simple PMR generation: Take PG token and create a derived value
-  // In production, this would use a more sophisticated algorithm
-  const timestamp = Date.now().toString().slice(-10);
-  const tokenHash = pgToken.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const suffix = tokenHash.toString().padStart(5, '0').slice(-5);
-  return `8${timestamp}${suffix}`;
+  if (!pgToken || pgToken.length === 0) {
+    throw new Error('Cannot generate PMR: PG Token is empty');
+  }
+
+  // Replace first digit from 9 to 8
+  if (pgToken.charAt(0) === '9') {
+    return '8' + pgToken.substring(1);
+  }
+
+  // If token doesn't start with 9, still replace first digit with 8
+  // This ensures PMR always starts with 8
+  return '8' + pgToken.substring(1);
 }
 
 /**
@@ -288,36 +385,171 @@ function decodePaymentMethodType(paymentMethodType: string | null): string | nul
 }
 
 /**
- * Update Payment Hub tables (simulated)
- * In real implementation, this would update:
- * - PAYMENT_METHOD
- * - TOKENIZED_CARD
- * - ENTITY_DETAILS
- * - ENTITY_PMR_MAPPING
- * - PMR_MONERIS_MAPPING
- * - TOKEN_ACTIVITY_LOG
+ * Extract FIRST_SIX and LAST_FOUR from SOURCEOFFUNDS_NUMBER
+ * Format: 512345xxxxxx2346 → FIRST_SIX: 512345, LAST_FOUR: 2346
  */
-async function updatePaymentHub(
-  moneris: MonerisTokenForMigration,
-  pgToken: PgTokenForMigration,
-  pmr: string
+function extractCardDigits(sourceOfFundsNumber: string | null): { firstSix: string | null; lastFour: string | null } {
+  if (!sourceOfFundsNumber || sourceOfFundsNumber.length < 16) {
+    return { firstSix: null, lastFour: null };
+  }
+
+  // Extract first 6 digits
+  const firstSix = sourceOfFundsNumber.substring(0, 6);
+  // Extract last 4 digits
+  const lastFour = sourceOfFundsNumber.substring(sourceOfFundsNumber.length - 4);
+
+  return { firstSix, lastFour };
+}
+
+/**
+ * Decode ENTITY_TYPE to ENTITY_REF_ID
+ * 1=ACCOUNTNUM, 2=GUID, 3=EMAILID, 4=VOICEID
+ */
+function decodeEntityRefId(entityType: string | null): number | null {
+  if (!entityType) return 1; // Default to ACCOUNTNUM
+
+  const entityTypeMap: Record<string, number> = {
+    'ACCOUNTNUM': 1,
+    'GUID': 2,
+    'EMAILID': 3,
+    'VOICEID': 4,
+  };
+
+  return entityTypeMap[entityType.toUpperCase()] || 1;
+}
+
+interface PaymentHubRecords {
+  paymentMethods: {
+    PMR: string;
+    PM_TYPE_ID: number;
+    PM_STATUS: string;
+    PAR: string | null;
+    PM_CREATION_DATE: Date;
+    PM_LAST_UPDATED: Date;
+    PM_LAST_USE_DATE: Date | null;
+    PM_CREATION_CHANNEL: string;
+    PM_UPDATED_CHANNEL: string;
+    INITIAL_TXN_ID: string | null;
+  }[];
+  tokenizedCards: {
+    CC_TOKEN: string;
+    PMR: string;
+    CC_EXP_DATE: string | null;
+    CC_CARD_BRAND: string | null;
+    FIRST_SIX: string | null;
+    LAST_FOUR: string | null;
+    ISSUER_NAME: string | null;
+    CARD_LEVEL: string | null;
+  }[];
+  entityDetails: {
+    ENTITY_ID: string;
+    ENTITY_REF_ID: number;
+    ENTITY_VALUE: string | null;
+    APPLICATION_INDICATOR: string;
+    SYSTEM_INDICATOR: string;
+    ENTITY_CREATION_DATE: Date;
+    ENTITY_LAST_UPDATED: Date;
+    PM_USAGE_TYPE: string | null;
+  }[];
+  entityPmrMappings: {
+    ENTITY_ID: string;
+    PMR: string;
+    PM_USAGE_TYPE: string | null;
+    PM_IS_PREF: string;
+    ENTITY_STATUS: string;
+    ENTITY_CREATION_DATE: Date;
+    ENTITY_LAST_UPDATED: Date;
+  }[];
+  pmrMonerisMappings: {
+    PMR: string;
+    MONERIS_TOKEN: string;
+    PG_TOKEN: string;
+    CREATION_DATE: Date;
+  }[];
+}
+
+/**
+ * Populate Payment Hub tables with migrated token data
+ * Tables: PAYMENT_METHOD, TOKENIZED_CARD, ENTITY_DETAILS, ENTITY_PMR_MAPPING
+ */
+async function populatePaymentHub(
+  records: PaymentHubRecords,
+  logger: Logger
 ): Promise<void> {
-  // This is a placeholder for actual Payment Hub updates
-  // In the real implementation, you would insert/update records in:
+  // 1. Insert PAYMENT_METHOD records
+  if (records.paymentMethods.length > 0) {
+    const pmColumns = [
+      'PMR', 'PM_TYPE_ID', 'PM_STATUS', 'PAR', 'PM_CREATION_DATE',
+      'PM_LAST_UPDATED', 'PM_LAST_USE_DATE', 'PM_CREATION_CHANNEL', 'PM_UPDATED_CHANNEL', 'INITIAL_TXN_ID'
+    ];
+    logger.info('Inserting PAYMENT_METHOD records', { count: records.paymentMethods.length });
+    await bulkInsertValues('PAYMENT_METHOD', pmColumns, records.paymentMethods);
+  }
 
-  // 1. PMR_MONERIS_MAPPING - Link Moneris token to PMR and PG token
-  // await executeQuery(
-  //   `INSERT INTO PMR_MONERIS_MAPPING (PMR, MONERIS_TOKEN, PG_TOKEN, CREATED_AT)
-  //    VALUES (@pmr, @monerisToken, @pgToken, GETUTCDATE())`,
-  //   { pmr, monerisToken: moneris.MONERIS_TOKEN, pgToken: pgToken.PG_TOKEN }
-  // );
+  // 2. Insert TOKENIZED_CARD records
+  if (records.tokenizedCards.length > 0) {
+    const tcColumns = [
+      'CC_TOKEN', 'PMR', 'CC_EXP_DATE', 'CC_CARD_BRAND',
+      'FIRST_SIX', 'LAST_FOUR', 'ISSUER_NAME', 'CARD_LEVEL'
+    ];
+    logger.info('Inserting TOKENIZED_CARD records', { count: records.tokenizedCards.length });
+    await bulkInsertValues('TOKENIZED_CARD', tcColumns, records.tokenizedCards);
+  }
 
-  // 2. TOKENIZED_CARD - Store card details
-  // 3. PAYMENT_METHOD - Create payment method record
-  // 4. ENTITY_PMR_MAPPING - Link entity to PMR
+  // 3. Insert ENTITY_DETAILS records (check for duplicates first)
+  if (records.entityDetails.length > 0) {
+    // Get unique entity IDs
+    const uniqueEntities = new Map<string, typeof records.entityDetails[0]>();
+    for (const entity of records.entityDetails) {
+      if (!uniqueEntities.has(entity.ENTITY_ID)) {
+        uniqueEntities.set(entity.ENTITY_ID, entity);
+      }
+    }
 
-  // For now, we just log that we would do this
-  // The actual implementation depends on the Payment Hub schema
+    const edColumns = [
+      'ENTITY_ID', 'ENTITY_REF_ID', 'ENTITY_VALUE', 'APPLICATION_INDICATOR',
+      'SYSTEM_INDICATOR', 'ENTITY_CREATION_DATE', 'ENTITY_LAST_UPDATED', 'PM_USAGE_TYPE'
+    ];
+    logger.info('Inserting ENTITY_DETAILS records', { count: uniqueEntities.size });
+
+    // Insert only if entity doesn't exist
+    for (const entity of uniqueEntities.values()) {
+      await executeQuery(
+        `IF NOT EXISTS (SELECT 1 FROM ENTITY_DETAILS WHERE ENTITY_ID = @entityId)
+         INSERT INTO ENTITY_DETAILS (ENTITY_ID, ENTITY_REF_ID, ENTITY_VALUE, APPLICATION_INDICATOR,
+           SYSTEM_INDICATOR, ENTITY_CREATION_DATE, ENTITY_LAST_UPDATED, PM_USAGE_TYPE)
+         VALUES (@entityId, @entityRefId, @entityValue, @appIndicator,
+           @sysIndicator, @creationDate, @lastUpdated, @usageType)`,
+        {
+          entityId: entity.ENTITY_ID,
+          entityRefId: entity.ENTITY_REF_ID,
+          entityValue: entity.ENTITY_VALUE,
+          appIndicator: entity.APPLICATION_INDICATOR,
+          sysIndicator: entity.SYSTEM_INDICATOR,
+          creationDate: entity.ENTITY_CREATION_DATE,
+          lastUpdated: entity.ENTITY_LAST_UPDATED,
+          usageType: entity.PM_USAGE_TYPE,
+        }
+      );
+    }
+  }
+
+  // 4. Insert ENTITY_PMR_MAPPING records
+  if (records.entityPmrMappings.length > 0) {
+    const epmColumns = [
+      'ENTITY_ID', 'PMR', 'PM_USAGE_TYPE', 'PM_IS_PREF',
+      'ENTITY_STATUS', 'ENTITY_CREATION_DATE', 'ENTITY_LAST_UPDATED'
+    ];
+    logger.info('Inserting ENTITY_PMR_MAPPING records', { count: records.entityPmrMappings.length });
+    await bulkInsertValues('ENTITY_PMR_MAPPING', epmColumns, records.entityPmrMappings);
+  }
+
+  // 5. Insert PMR_MONERIS_MAPPING records
+  if (records.pmrMonerisMappings.length > 0) {
+    const pmmColumns = ['PMR', 'MONERIS_TOKEN', 'PG_TOKEN', 'CREATION_DATE'];
+    logger.info('Inserting PMR_MONERIS_MAPPING records', { count: records.pmrMonerisMappings.length });
+    await bulkInsertValues('PMR_MONERIS_MAPPING', pmmColumns, records.pmrMonerisMappings);
+  }
 }
 
 /**

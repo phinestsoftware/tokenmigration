@@ -165,7 +165,7 @@ async function createBatchRecord(
     `INSERT INTO TOKEN_MIGRATION_BATCH
      (BATCH_ID, FILE_ID, FILE_NAME, SOURCE_ID, MIGRATION_TYPE, CONTEXT, STATUS,
       TOTAL_TOKEN_COUNT, BATCH_NUMBER, TOTAL_BATCHES, BATCH_SIZE)
-     VALUES (@batchId, @fileId, @fileName, @sourceId, 'MASS', 'MONERIS', 'PENDING',
+     VALUES (@batchId, @fileId, @fileName, @sourceId, 'MASS', 'MassMigPG', 'PENDING',
              @tokenCount, @batchNumber, @totalBatches, @tokenCount)`,
     { batchId, fileId, fileName, sourceId, tokenCount, batchNumber, totalBatches }
   );

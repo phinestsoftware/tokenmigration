@@ -144,6 +144,7 @@ BEGIN
         [PROCESS_END_TIME] DATETIME2 NULL,
         [BLOB_CONTAINER] VARCHAR(100) NULL,
         [BLOB_PATH] VARCHAR(500) NULL,
+        [BATCH_CONTEXT] NVARCHAR(MAX) DEFAULT '{}',
         [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
         [UPDATED_AT] DATETIME2 NULL,
         CONSTRAINT [PK_TOKEN_MIGRATION_BATCH] PRIMARY KEY CLUSTERED ([ID] ASC),
@@ -259,7 +260,218 @@ END
 GO
 
 -- =====================================================
--- 8. Insert Default Configuration
+-- 8. PAYMENT_METHOD_TYPE (Reference Table)
+-- Payment method types: Credit Card, Debit Card, Apple Pay, etc.
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PAYMENT_METHOD_TYPE]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[PAYMENT_METHOD_TYPE] (
+        [PM_TYPE_ID] INT NOT NULL,
+        [PM_TYPE_NAME] VARCHAR(50) NOT NULL,
+        [PM_TYPE_VALUE] VARCHAR(10) NULL,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_PAYMENT_METHOD_TYPE] PRIMARY KEY CLUSTERED ([PM_TYPE_ID] ASC)
+    );
+
+    -- Insert default payment method types
+    INSERT INTO [dbo].[PAYMENT_METHOD_TYPE] ([PM_TYPE_ID], [PM_TYPE_NAME], [PM_TYPE_VALUE])
+    VALUES
+        (1, 'Credit card', 'CC'),
+        (2, 'Debit card', 'DC'),
+        (3, 'Apple Pay', 'AP'),
+        (4, 'Google Pay', 'GP'),
+        (5, 'Click To Pay', 'CTP');
+END
+GO
+
+-- =====================================================
+-- 9. ENTITY_REF (Reference Table)
+-- Entity reference types: Account Number, GUID, Email, etc.
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ENTITY_REF]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[ENTITY_REF] (
+        [ENTITY_REF_ID] INT NOT NULL,
+        [ENTITY_REF_TYPE] VARCHAR(50) NOT NULL,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_ENTITY_REF] PRIMARY KEY CLUSTERED ([ENTITY_REF_ID] ASC)
+    );
+
+    -- Insert default entity reference types
+    INSERT INTO [dbo].[ENTITY_REF] ([ENTITY_REF_ID], [ENTITY_REF_TYPE])
+    VALUES
+        (1, 'ACCOUNTNUM'),
+        (2, 'GUID'),
+        (3, 'EMAILID'),
+        (4, 'VOICEID');
+END
+GO
+
+-- =====================================================
+-- 10. PAYMENT_METHOD
+-- Main payment method table, PMR is derived from PG Token
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PAYMENT_METHOD]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[PAYMENT_METHOD] (
+        [PMR] VARCHAR(16) NOT NULL,
+        [PM_TYPE_ID] INT NOT NULL,
+        [PM_STATUS] VARCHAR(20) NULL,
+        [PAR] VARCHAR(50) NULL,
+        [PM_CREATION_DATE] DATETIME2 NULL,
+        [PM_LAST_UPDATED] DATETIME2 NULL,
+        [PM_LAST_USE_DATE] DATE NULL,
+        [PM_CREATION_CHANNEL] VARCHAR(20) NULL,
+        [PM_UPDATED_CHANNEL] VARCHAR(20) NULL,
+        [INITIAL_TXN_ID] VARCHAR(50) NULL,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_PAYMENT_METHOD] PRIMARY KEY CLUSTERED ([PMR] ASC),
+        CONSTRAINT [FK_PAYMENT_METHOD_TYPE] FOREIGN KEY ([PM_TYPE_ID]) REFERENCES [dbo].[PAYMENT_METHOD_TYPE]([PM_TYPE_ID])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_PM_STATUS] ON [dbo].[PAYMENT_METHOD] ([PM_STATUS]);
+    CREATE NONCLUSTERED INDEX [IX_PM_TYPE_ID] ON [dbo].[PAYMENT_METHOD] ([PM_TYPE_ID]);
+END
+GO
+
+-- =====================================================
+-- 11. TOKENIZED_CARD
+-- Card details linked to Payment Method
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TOKENIZED_CARD]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[TOKENIZED_CARD] (
+        [CC_TOKEN] VARCHAR(32) NOT NULL,
+        [PMR] VARCHAR(16) NOT NULL,
+        [CC_EXP_DATE] VARCHAR(10) NULL,
+        [CC_CARD_BRAND] VARCHAR(20) NULL,
+        [FIRST_SIX] VARCHAR(6) NULL,
+        [LAST_FOUR] VARCHAR(4) NULL,
+        [ISSUER_NAME] VARCHAR(100) NULL,
+        [CARD_LEVEL] VARCHAR(20) NULL,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_TOKENIZED_CARD] PRIMARY KEY CLUSTERED ([CC_TOKEN] ASC),
+        CONSTRAINT [FK_TOKENIZED_CARD_PMR] FOREIGN KEY ([PMR]) REFERENCES [dbo].[PAYMENT_METHOD]([PMR])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_TC_PMR] ON [dbo].[TOKENIZED_CARD] ([PMR]);
+    CREATE NONCLUSTERED INDEX [IX_TC_CARD_BRAND] ON [dbo].[TOKENIZED_CARD] ([CC_CARD_BRAND]);
+END
+GO
+
+-- =====================================================
+-- 12. ENTITY_DETAILS
+-- Entity information (account number, GUID, email, etc.)
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ENTITY_DETAILS]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[ENTITY_DETAILS] (
+        [ENTITY_ID] VARCHAR(50) NOT NULL,
+        [ENTITY_REF_ID] INT NOT NULL,
+        [ENTITY_VALUE] VARCHAR(255) NULL,
+        [APPLICATION_INDICATOR] VARCHAR(50) NULL,
+        [SYSTEM_INDICATOR] VARCHAR(50) NULL,
+        [ENTITY_CREATION_DATE] DATETIME2 NULL,
+        [ENTITY_LAST_UPDATED] DATETIME2 NULL,
+        [PM_USAGE_TYPE] VARCHAR(50) NULL,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_ENTITY_DETAILS] PRIMARY KEY CLUSTERED ([ENTITY_ID] ASC),
+        CONSTRAINT [FK_ENTITY_DETAILS_REF] FOREIGN KEY ([ENTITY_REF_ID]) REFERENCES [dbo].[ENTITY_REF]([ENTITY_REF_ID])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_ED_ENTITY_REF_ID] ON [dbo].[ENTITY_DETAILS] ([ENTITY_REF_ID]);
+    CREATE NONCLUSTERED INDEX [IX_ED_ENTITY_VALUE] ON [dbo].[ENTITY_DETAILS] ([ENTITY_VALUE]);
+END
+GO
+
+-- =====================================================
+-- 13. ENTITY_PMR_MAPPING
+-- Links entities to payment methods
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ENTITY_PMR_MAPPING]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[ENTITY_PMR_MAPPING] (
+        [ID] BIGINT IDENTITY(1,1) NOT NULL,
+        [ENTITY_ID] VARCHAR(50) NOT NULL,
+        [PMR] VARCHAR(16) NOT NULL,
+        [PM_USAGE_TYPE] VARCHAR(50) NULL,
+        [PM_IS_PREF] CHAR(1) DEFAULT 'N',
+        [ENTITY_STATUS] VARCHAR(20) NULL,
+        [ENTITY_CREATION_DATE] DATETIME2 NULL,
+        [ENTITY_LAST_UPDATED] DATETIME2 NULL,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_ENTITY_PMR_MAPPING] PRIMARY KEY CLUSTERED ([ID] ASC),
+        CONSTRAINT [FK_EPM_ENTITY] FOREIGN KEY ([ENTITY_ID]) REFERENCES [dbo].[ENTITY_DETAILS]([ENTITY_ID]),
+        CONSTRAINT [FK_EPM_PMR] FOREIGN KEY ([PMR]) REFERENCES [dbo].[PAYMENT_METHOD]([PMR])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_EPM_ENTITY_ID] ON [dbo].[ENTITY_PMR_MAPPING] ([ENTITY_ID]);
+    CREATE NONCLUSTERED INDEX [IX_EPM_PMR] ON [dbo].[ENTITY_PMR_MAPPING] ([PMR]);
+    CREATE UNIQUE NONCLUSTERED INDEX [UQ_EPM_ENTITY_PMR_USAGE] ON [dbo].[ENTITY_PMR_MAPPING] ([ENTITY_ID], [PMR], [PM_USAGE_TYPE]);
+END
+GO
+
+-- =====================================================
+-- 14. TOKEN_ACTIVITY_LOG
+-- Tracks changes to tokens (PAN updates, expiry updates)
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TOKEN_ACTIVITY_LOG]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[TOKEN_ACTIVITY_LOG] (
+        [ID] BIGINT IDENTITY(1,1) NOT NULL,
+        [PMR] VARCHAR(16) NOT NULL,
+        [CC_TOKEN] VARCHAR(32) NOT NULL,
+        [LAST_FOUR_CURRENT] VARCHAR(4) NULL,
+        [EXP_DATE_CURRENT] VARCHAR(10) NULL,
+        [IS_PAN_UPDATED] CHAR(1) DEFAULT 'N',
+        [IS_EXP_DATE_UPDATED] CHAR(1) DEFAULT 'N',
+        [LAST_FOUR_NEW] VARCHAR(4) NULL,
+        [EXP_DATE_NEW] VARCHAR(10) NULL,
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        [UPDATED_BY] VARCHAR(50) NULL,
+        CONSTRAINT [PK_TOKEN_ACTIVITY_LOG] PRIMARY KEY CLUSTERED ([ID] ASC)
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_TAL_PMR] ON [dbo].[TOKEN_ACTIVITY_LOG] ([PMR]);
+    CREATE NONCLUSTERED INDEX [IX_TAL_CC_TOKEN] ON [dbo].[TOKEN_ACTIVITY_LOG] ([CC_TOKEN]);
+    CREATE NONCLUSTERED INDEX [IX_TAL_CREATED_AT] ON [dbo].[TOKEN_ACTIVITY_LOG] ([CREATED_AT] DESC);
+END
+GO
+
+-- =====================================================
+-- 15. PMR_MONERIS_MAPPING
+-- Maps PMR to Moneris and PG tokens
+-- =====================================================
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PMR_MONERIS_MAPPING]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[PMR_MONERIS_MAPPING] (
+        [ID] BIGINT IDENTITY(1,1) NOT NULL,
+        [PMR] VARCHAR(16) NOT NULL,
+        [MONERIS_TOKEN] VARCHAR(32) NOT NULL,
+        [PG_TOKEN] VARCHAR(32) NOT NULL,
+        [CREATION_DATE] DATETIME2 DEFAULT GETUTCDATE(),
+        [CREATED_AT] DATETIME2 DEFAULT GETUTCDATE(),
+        [UPDATED_AT] DATETIME2 NULL,
+        CONSTRAINT [PK_PMR_MONERIS_MAPPING] PRIMARY KEY CLUSTERED ([ID] ASC),
+        CONSTRAINT [FK_PMM_PMR] FOREIGN KEY ([PMR]) REFERENCES [dbo].[PAYMENT_METHOD]([PMR])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_PMM_PMR] ON [dbo].[PMR_MONERIS_MAPPING] ([PMR]);
+    CREATE NONCLUSTERED INDEX [IX_PMM_MONERIS_TOKEN] ON [dbo].[PMR_MONERIS_MAPPING] ([MONERIS_TOKEN]);
+    CREATE NONCLUSTERED INDEX [IX_PMM_PG_TOKEN] ON [dbo].[PMR_MONERIS_MAPPING] ([PG_TOKEN]);
+    CREATE UNIQUE NONCLUSTERED INDEX [UQ_PMM_PMR_MONERIS] ON [dbo].[PMR_MONERIS_MAPPING] ([PMR], [MONERIS_TOKEN]);
+END
+GO
+
+-- =====================================================
+-- 16. Insert Default Configuration
 -- =====================================================
 IF NOT EXISTS (SELECT 1 FROM [dbo].[MIGRATION_CONFIG] WHERE [CONFIG_KEY] = 'DEFAULT_BATCH_SIZE')
 BEGIN

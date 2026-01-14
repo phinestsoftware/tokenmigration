@@ -73,7 +73,7 @@ async function uploadFileHandler(
     const tokenType = parsedFileName?.tokenType ?? 'P';
 
     // Create batch record BEFORE validation so rejected files have a record for reporting
-    await createFileBatchRecord(fileId, fileName, sourceId, tokenType, contextType, 0, blobPath, 'VALIDATING');
+    await createFileBatchRecord(fileId, fileName, sourceId, tokenType, 0, blobPath, 'VALIDATING');
 
     // Validate file structure
     const expectedColumns = MonerisTokenCsvColumns;
@@ -234,7 +234,7 @@ async function handleMastercardResponse(
   // Per DDD: "Assign File id to the uploaded tokens and insert record to: TOKEN_MIGRATION_BATCH"
   // Create batch record for MC response file (Bug #43 fix)
   const blobPath = `mastercard-mapping/${fileName}`;
-  await createFileBatchRecord(fileId, fileName, sourceId, tokenType, 'PG', recordCount, blobPath, 'PROCESSING');
+  await createFileBatchRecord(fileId, fileName, sourceId, tokenType, recordCount, blobPath, 'PROCESSING');
 
   // Insert audit log
   await insertAuditLog(fileId, null, 'MC_RESP_RECV',
@@ -312,7 +312,6 @@ async function createFileBatchRecord(
   fileName: string,
   sourceId: string,
   tokenType: string,
-  context: string,
   tokenCount: number,
   blobPath: string,
   status: string = 'PENDING'
@@ -321,7 +320,7 @@ async function createFileBatchRecord(
     `INSERT INTO TOKEN_MIGRATION_BATCH
      (BATCH_ID, FILE_ID, FILE_NAME, SOURCE_ID, TOKEN_TYPE, MIGRATION_TYPE, CONTEXT,
       STATUS, TOTAL_TOKEN_COUNT, BLOB_PATH, FILE_TIMESTAMP)
-     VALUES (@batchId, @fileId, @fileName, @sourceId, @tokenType, @migrationType, @context,
+     VALUES (@batchId, @fileId, @fileName, @sourceId, @tokenType, @migrationType, 'MassMigPG',
              @status, @tokenCount, @blobPath, GETUTCDATE())`,
     {
       batchId: fileId, // For file-level record, batchId = fileId
@@ -330,7 +329,6 @@ async function createFileBatchRecord(
       sourceId,
       tokenType,
       migrationType: 'MASS',
-      context,
       status,
       tokenCount,
       blobPath,
