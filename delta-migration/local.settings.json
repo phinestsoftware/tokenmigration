@@ -1,0 +1,25 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "FUNCTIONS_NODE_BLOCK_ON_ENTRY_POINT_ERROR": "true",
+
+    "SQL_SERVER": "localhost",
+    "SQL_DATABASE": "TokenMigration",
+    "SQL_USER": "sa",
+    "SQL_PASSWORD": "YourPassword123!",
+    "SQL_ENCRYPT": "false",
+    "SQL_TRUST_SERVER_CERTIFICATE": "true",
+
+    "DEFAULT_BATCH_SIZE": "500",
+    "FAILURE_THRESHOLD_PERCENT": "50",
+
+    "PG_TOKENIZATION_URL": "http://localhost:7070",
+    "DEFAULT_MERCHANT_ID": "SBX_ROGERS",
+
+    "EMAIL_CONNECTION_STRING": "",
+    "EMAIL_SENDER_ADDRESS": "noreply@rogers.com",
+    "EMAIL_NOTIFICATION_RECIPIENTS": "team@rogers.com"
+  }
+}

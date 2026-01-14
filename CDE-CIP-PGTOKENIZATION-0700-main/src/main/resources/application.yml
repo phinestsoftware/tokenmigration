@@ -1,0 +1,32 @@
+server:
+  port: 7070
+
+spring:
+  application:
+    name: pgtokenization
+
+# TNDispatcher Configuration (Moneris communication)
+tndispatcher:
+  base:
+    url: ${TNDISPATCHER_URL:http://localhost:7050}
+
+# PGDispatcher Configuration (Mastercard communication)
+pgdispatcher:
+  base:
+    url: ${PGDISPATCHER_URL:http://localhost:7060}
+
+# HTTP Client Configuration
+pgtokenization:
+  http:
+    connection:
+      pool:
+        size: 50
+      timeout: 30000
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.rogers.pgtokenization: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

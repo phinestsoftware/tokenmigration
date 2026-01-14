@@ -1,0 +1,21 @@
+server:
+  port: 7061
+
+spring:
+  application:
+    name: mastercardmock
+
+# Mock Processing Configuration
+mock:
+  batch:
+    processing:
+      delay:
+        ms: 2000  # Simulated processing delay in milliseconds
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.rogers.mastercardmock: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

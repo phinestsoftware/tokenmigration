@@ -1,0 +1,30 @@
+server:
+  port: 7060
+
+spring:
+  application:
+    name: pgdispatcher
+
+# Mastercard API Configuration
+mastercard:
+  api:
+    base:
+      url: ${MASTERCARD_API_URL:http://localhost:7061}
+    version: ${MASTERCARD_API_VERSION:73}
+    password: ${MASTERCARD_API_PASSWORD:}
+
+# HTTP Client Configuration
+pgdispatcher:
+  http:
+    connection:
+      pool:
+        size: 50
+      timeout: 30000
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.rogers.pgdispatcher: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

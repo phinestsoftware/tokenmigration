@@ -1,0 +1,55 @@
+{
+  "name": "delta-migration",
+  "version": "1.0.0",
+  "description": "Azure Functions for Payment Token Delta Migration - Moneris to Mastercard via PG Tokenization",
+  "main": "dist/src/functions/*.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "clean": "rimraf dist",
+    "prestart": "npm run clean && npm run build",
+    "start": "func start",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "db:migrate": "ts-node infra/scripts/migrate-db.ts"
+  },
+  "dependencies": {
+    "@azure/communication-email": "^1.1.0",
+    "@azure/functions": "^4.5.0",
+    "@azure/identity": "^4.2.0",
+    "@azure/keyvault-secrets": "^4.8.0",
+    "@azure/storage-blob": "^12.17.0",
+    "@azure/storage-queue": "^12.16.0",
+    "csv-parse": "^5.5.3",
+    "csv-stringify": "^6.4.5",
+    "date-fns": "^3.3.1",
+    "mssql": "^10.0.4",
+    "uuid": "^9.0.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/mssql": "^9.1.5",
+    "@types/node": "^20.11.0",
+    "@types/uuid": "^9.0.8",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "azurite": "^3.29.0",
+    "dotenv": "^17.2.3",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.2.5",
+    "rimraf": "^5.0.5",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
