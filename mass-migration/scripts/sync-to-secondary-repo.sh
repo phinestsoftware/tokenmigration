@@ -65,6 +65,7 @@ EXCLUDED FILES:
     - tfplan*                           (Terraform plan files)
     - scripts/sync-to-secondary-repo.sh (this script)
     - scripts/query-db.js               (internal database query tool)
+    - scripts/benchmark.js              (internal benchmark tool)
 
 WORKFLOW:
     Normal workflow (main -> secondary):
@@ -116,6 +117,7 @@ EXCLUDES=(
     ".terraform.lock.hcl"
     "scripts/sync-to-secondary-repo.sh"
     "scripts/query-db.js"
+    "scripts/benchmark.js"
 )
 
 # Colors for output

@@ -63,11 +63,12 @@ class Timer {
 // Token format: 9XXX + 12 digit counter = 16 chars total (VARCHAR(16) limit)
 // Supports up to 999,999,999,999 (999 billion) unique tokens per prefix
 function generateTestCsv(tokenCount, prefix) {
-  const header = 'MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT';
+  const header = 'MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT,USAGE_TYPE';
   const lines = [header];
 
   const expDates = ['0125', '0626', '1227', '0328', '0929'];
   const entityTypes = ['1', '2'];
+  const usageTypes = ['1', '2'];
 
   // Use 3-digit prefix to keep token at 16 chars: 9 + XXX + 12-digit counter
   const shortPrefix = prefix.slice(-3);
@@ -78,10 +79,11 @@ function generateTestCsv(tokenCount, prefix) {
     const expDate = expDates[i % expDates.length];
     const entityId = `E${String(i % 100000).padStart(5, '0')}`;
     const entityType = entityTypes[i % entityTypes.length];
+    const usageType = usageTypes[i % usageTypes.length];
     const creationDate = '20240115';
     const lastUseDate = '20241201';
 
-    lines.push(`${token},${expDate},${entityId},${entityType},O,${creationDate},${lastUseDate},,`);
+    lines.push(`${token},${expDate},${entityId},${entityType},O,${creationDate},${lastUseDate},,,${usageType}`);
   }
 
   return lines.join('\n');

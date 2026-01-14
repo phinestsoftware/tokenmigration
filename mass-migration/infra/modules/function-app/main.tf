@@ -85,13 +85,13 @@ variable "email_to_address" {
   default = ""
 }
 
-# App Service Plan
+# App Service Plan - Premium V3 for dedicated compute
 resource "azurerm_service_plan" "main" {
-  name                = "asp-${var.project_name}-${var.environment}"
+  name                = "asp-${var.project_name}-${var.environment}-premium"
   resource_group_name = var.resource_group_name
   location            = var.location
   os_type             = "Linux"
-  sku_name            = var.environment == "prod" ? "EP1" : "Y1"
+  sku_name            = "P1v3"
 
   tags = var.tags
 }
