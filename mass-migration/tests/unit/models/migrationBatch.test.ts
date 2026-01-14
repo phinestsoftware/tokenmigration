@@ -55,6 +55,36 @@ describe('MigrationBatch Model', () => {
 
       expect(result).toBeNull();
     });
+
+    // Underscore format tests (legacy support)
+    it('should parse underscore format file name', () => {
+      const result = parseFileName('V21_P_20251208_143000.csv');
+
+      expect(result).not.toBeNull();
+      expect(result?.sourceId).toBe('V21');
+      expect(result?.tokenType).toBe('P');
+      expect(result?.date).toBe('20251208');
+      expect(result?.sequence).toBe('1430'); // First 4 digits of HHMMSS
+      expect(result?.extension).toBe('csv');
+    });
+
+    it('should parse WINM underscore format', () => {
+      const result = parseFileName('WINM_P_20251211_150000.csv');
+
+      expect(result?.sourceId).toBe('WINM');
+      expect(result?.tokenType).toBe('P');
+      expect(result?.date).toBe('20251211');
+      expect(result?.sequence).toBe('1500');
+    });
+
+    it('should parse underscore format with path', () => {
+      const result = parseFileName('billing-input/V21/V21_P_20251208_093045.csv');
+
+      expect(result?.sourceId).toBe('V21');
+      expect(result?.tokenType).toBe('P');
+      expect(result?.date).toBe('20251208');
+      expect(result?.sequence).toBe('0930');
+    });
   });
 
   describe('generateFileId', () => {

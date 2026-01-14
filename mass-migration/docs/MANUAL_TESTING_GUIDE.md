@@ -35,6 +35,24 @@ You need access to the following Azure resources:
 ## Test File Format
 
 ### File Naming Convention
+
+**Preferred format (per HLD spec):**
+```
+{SOURCE_ID}.{TYPE}.{YYYYMMDD}.{NNNN}.input
+```
+
+Where:
+- **SOURCE_ID**: V21, WINM (WinOnline Media), TSC, etc.
+- **TYPE**: P (payment tokens), T (transactional history), I (ID tokens)
+- **YYYYMMDD**: Year, month, day
+- **NNNN**: File sequence number, starting from 0001
+
+**Examples:**
+- `V21.P.20251211.0001.input`
+- `WINM.P.20251211.0001.input`
+- `TSC.P.20251211.0001.input`
+
+**Legacy format (also supported):**
 ```
 {SOURCE}_{TYPE}_{YYYYMMDD}_{HHMMSS}.csv
 ```
@@ -42,7 +60,6 @@ You need access to the following Azure resources:
 **Examples:**
 - `V21_P_20251211_143000.csv`
 - `WINM_P_20251211_150000.csv`
-- `TSC_P_20251211_160000.csv`
 
 **Source IDs:**
 | Source ID | Description |
@@ -81,7 +98,7 @@ MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_D
 
 ### Sample Test File
 
-Create a file named `V21_P_20251211_143000.csv`:
+Create a file named `V21.P.20251211.0001.input`:
 
 ```csv
 MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT
@@ -139,9 +156,9 @@ The file MUST be uploaded to a subfolder matching the source ID:
 3. Click **Browse for files** and select your CSV file
 4. Click **Upload**
 
-**Correct path:** `billing-input/V21/V21_P_20251211_143000.csv`
+**Correct path:** `billing-input/V21/V21.P.20251211.0001.input`
 
-**WRONG path:** `billing-input/V21_P_20251211_143000.csv` (missing subfolder!)
+**WRONG path:** `billing-input/V21.P.20251211.0001.input` (missing subfolder!)
 
 ### Step 5: Verify Upload
 
@@ -393,8 +410,8 @@ MONERIS_TOKEN,ERROR_CODE,ERROR_MESSAGE,STATUS
 **Symptom:** File uploaded but no logs appear
 
 **Check:**
-1. File is in correct path: `billing-input/{SOURCE}/filename.csv`
-2. File has correct extension: `.csv`
+1. File is in correct path: `billing-input/{SOURCE}/filename.input`
+2. File naming follows convention: `{SOURCE}.{TYPE}.{YYYYMMDD}.{NNNN}.input`
 3. File has valid CSV header
 4. Function App is running (check Function App overview)
 
@@ -479,8 +496,9 @@ MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_D
 
 ### Upload Path
 ```
-billing-input/{SOURCE}/{FILENAME}.csv
+billing-input/{SOURCE}/{SOURCE}.{TYPE}.{YYYYMMDD}.{NNNN}.input
 ```
+Example: `billing-input/V21/V21.P.20251211.0001.input`
 
 ### Check Status Query
 ```sql

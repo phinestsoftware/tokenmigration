@@ -116,7 +116,9 @@ export const AuditMessageCodes = {
 
 /**
  * Parse file name to extract metadata
- * Format: SOURCE_ID.TYPE.YYYYMMDD.NNNN.input
+ * Supports two formats:
+ *   - Dot format (HLD spec): SOURCE_ID.TYPE.YYYYMMDD.NNNN.input (e.g., V21.P.20251208.0001.input)
+ *   - Underscore format (legacy): SOURCE_TYPE_YYYYMMDD_HHMMSS.csv (e.g., V21_P_20251208_143000.csv)
  */
 export function parseFileName(fileName: string): {
   sourceId: string;
@@ -128,18 +130,34 @@ export function parseFileName(fileName: string): {
   // Remove path if present
   const baseName = fileName.split('/').pop() ?? fileName;
 
-  // Parse: V21.P.20251208.0001.input
-  const match = baseName.match(/^([A-Z0-9]+)\.([PTI])\.(\d{8})\.(\d{4})\.(\w+)$/i);
+  // Try dot format first (HLD spec): V21.P.20251208.0001.input
+  const dotMatch = baseName.match(/^([A-Z0-9]+)\.([PTI])\.(\d{8})\.(\d{4})\.(\w+)$/i);
+  if (dotMatch) {
+    return {
+      sourceId: dotMatch[1].toUpperCase(),
+      tokenType: dotMatch[2].toUpperCase(),
+      date: dotMatch[3],
+      sequence: dotMatch[4],
+      extension: dotMatch[5].toLowerCase(),
+    };
+  }
 
-  if (!match) return null;
+  // Try underscore format (legacy): V21_P_20251208_143000.csv
+  const underscoreMatch = baseName.match(/^([A-Z0-9]+)_([PTI])_(\d{8})_(\d{6})\.(\w+)$/i);
+  if (underscoreMatch) {
+    // Convert HHMMSS to sequence number (use first 4 digits)
+    const hhmmss = underscoreMatch[4];
+    const sequence = hhmmss.substring(0, 4);
+    return {
+      sourceId: underscoreMatch[1].toUpperCase(),
+      tokenType: underscoreMatch[2].toUpperCase(),
+      date: underscoreMatch[3],
+      sequence: sequence,
+      extension: underscoreMatch[5].toLowerCase(),
+    };
+  }
 
-  return {
-    sourceId: match[1].toUpperCase(),
-    tokenType: match[2].toUpperCase(),
-    date: match[3],
-    sequence: match[4],
-    extension: match[5].toLowerCase(),
-  };
+  return null;
 }
 
 /**
