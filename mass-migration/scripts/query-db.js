@@ -20,7 +20,7 @@ const sql = require('mssql');
 const config = {
   user: 'tokenmigadmin',
   password: 'hcRGQv6bzHzWVfsBWRsFZ69U',
-  server: 'sql-tokenmigration-dev-eo3t51.database.windows.net',
+  server: 'sql-tokenmigration-dev-941olb.database.windows.net',
   database: 'sqldb-tokenmigration-dev',
   options: {
     encrypt: true,

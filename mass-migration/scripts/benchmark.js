@@ -21,7 +21,7 @@ const path = require('path');
 // Configuration
 const CONFIG = {
   sql: {
-    server: 'sql-tokenmigration-dev-eo3t51.database.windows.net',
+    server: 'sql-tokenmigration-dev-941olb.database.windows.net',
     database: 'sqldb-tokenmigration-dev',
     user: 'tokenmigadmin',
     password: 'hcRGQv6bzHzWVfsBWRsFZ69U',
@@ -29,10 +29,10 @@ const CONFIG = {
     pool: { max: 10, min: 0, idleTimeoutMillis: 30000 }
   },
   storage: {
-    accountName: 'sttokenmigeo3t51',
+    accountName: 'sttokenmig941olb',
     containerName: 'billing-input'
   },
-  functionApp: 'func-tokenmigration-dev-eo3t51',
+  functionApp: 'func-tokenmigration-dev-941olb',
   resourceGroup: 'rg-tokenmigration-dev'
 };
 

@@ -25,10 +25,18 @@ Azure Functions-based token migration service for Rogers. Processes billing file
 ### IMPORTANT: Always Check Error Logs First!
 When something doesn't work in Azure Functions:
 
+**Step 0: First, discover the correct App Insights name (it may change after Terraform/pipeline deployments):**
+```bash
+# Get the App Insights resource name dynamically
+APP_INSIGHTS=$(az resource list --resource-group rg-tokenmigration-dev --resource-type "Microsoft.Insights/components" --query "[0].name" -o tsv)
+echo "App Insights name: $APP_INSIGHTS"
+```
+
 1. **Check Application Insights exceptions IMMEDIATELY:**
 ```bash
+APP_INSIGHTS=$(az resource list --resource-group rg-tokenmigration-dev --resource-type "Microsoft.Insights/components" --query "[0].name" -o tsv)
 az monitor app-insights query \
-  --app appi-tokenmigration-dev \
+  --app "$APP_INSIGHTS" \
   --resource-group rg-tokenmigration-dev \
   --analytics-query "exceptions | where timestamp > ago(30m) | project timestamp, outerMessage, innermostMessage | order by timestamp desc | take 20" \
   --output json | jq -r '.tables[0].rows[]?'
@@ -36,8 +44,9 @@ az monitor app-insights query \
 
 2. **Check function execution traces:**
 ```bash
+APP_INSIGHTS=$(az resource list --resource-group rg-tokenmigration-dev --resource-type "Microsoft.Insights/components" --query "[0].name" -o tsv)
 az monitor app-insights query \
-  --app appi-tokenmigration-dev \
+  --app "$APP_INSIGHTS" \
   --resource-group rg-tokenmigration-dev \
   --analytics-query "traces | where timestamp > ago(10m) | where message contains 'error' or message contains 'failed' | project timestamp, message, severityLevel | order by timestamp desc | take 30" \
   --output json | jq -r '.tables[0].rows[]?'
@@ -45,8 +54,9 @@ az monitor app-insights query \
 
 3. **Check for "Failed" executions:**
 ```bash
+APP_INSIGHTS=$(az resource list --resource-group rg-tokenmigration-dev --resource-type "Microsoft.Insights/components" --query "[0].name" -o tsv)
 az monitor app-insights query \
-  --app appi-tokenmigration-dev \
+  --app "$APP_INSIGHTS" \
   --resource-group rg-tokenmigration-dev \
   --analytics-query "traces | where message contains 'Failed' | order by timestamp desc | take 10" --output json
 ```
@@ -181,12 +191,14 @@ When `MOCK_MASTERCARD_ENABLED=true`:
 This tests the **actual production code path** - only the file source differs.
 
 ## Azure Resources
+**Note:** Resource names may change after Terraform/pipeline deployments. Always discover names dynamically when possible.
+
 - Resource Group: `rg-tokenmigration-dev`
-- Function App: `func-tokenmigration-dev-oqt29j`
-- Storage: `sttokenmigoqt29j`
-- SQL Server: `sql-tokenmigration-dev-oqt29j`
+- Function App: Discover with `az functionapp list --resource-group rg-tokenmigration-dev --query "[0].name" -o tsv`
+- Storage: Discover with `az storage account list --resource-group rg-tokenmigration-dev --query "[0].name" -o tsv`
+- SQL Server: Discover with `az sql server list --resource-group rg-tokenmigration-dev --query "[0].name" -o tsv`
 - SQL Database: `sqldb-tokenmigration-dev`
-- App Insights: `appi-tokenmigration-dev-oqt29j`
+- App Insights: Discover with `az resource list --resource-group rg-tokenmigration-dev --resource-type "Microsoft.Insights/components" --query "[0].name" -o tsv`
 
 ## Testing Scripts
 

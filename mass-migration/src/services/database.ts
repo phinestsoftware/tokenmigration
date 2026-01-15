@@ -134,7 +134,8 @@ export const SqlTypes = {
 };
 
 // SQL Server limit is 2100 parameters per query
-const SQL_PARAM_LIMIT = 2100;
+// Use 2000 to leave some buffer (some drivers/versions may have slightly lower limits)
+const SQL_PARAM_LIMIT = 2000;
 
 /**
  * Bulk UPDATE using a temp table and JOIN
