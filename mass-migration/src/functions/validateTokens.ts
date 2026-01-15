@@ -18,6 +18,7 @@ import {
   ValidationErrors,
 } from '../services/validationService.js';
 import { AuditMessageCodes } from '../models/migrationBatch.js';
+import { checkExistingTokensInPaymentHub } from '../services/duplicateDetectionService.js';
 
 interface TokenRecord {
   ID: number;
@@ -209,7 +210,8 @@ async function validateMonerisTokens(
   }
 
   // Check for duplicates in Payment Hub (existing tokens)
-  const existingDuplicates = await checkExistingTokens(fileId, logger);
+  // Issue #42 FIX: Now checks PMR_MONERIS_MAPPING table instead of MONERIS_TOKENS_STAGING
+  const existingDuplicates = await checkExistingTokensInPaymentHub(fileId, logger);
   duplicateCount += existingDuplicates;
   validCount -= existingDuplicates; // Decrement validCount since these were initially counted as valid
 
@@ -316,50 +318,8 @@ async function validatePgTokens(fileId: string, logger: Logger): Promise<void> {
     { validCount, failureCount });
 }
 
-/**
- * Check for existing tokens in Payment Hub - using bulk update
- */
-async function checkExistingTokens(fileId: string, logger: Logger): Promise<number> {
-  // Check PMR_MONERIS_MAPPING for existing tokens
-  // In a real implementation, this would join with Payment Hub tables
-  // For now, we'll simulate this check
-
-  const result = await executeQuery<{ ID: number; MONERIS_TOKEN: string }>(
-    `SELECT m.ID, m.MONERIS_TOKEN
-     FROM MONERIS_TOKENS_STAGING m
-     WHERE m.FILE_ID = @fileId
-       AND m.VALIDATION_STATUS = 'VALID'
-       AND EXISTS (
-         SELECT 1 FROM MONERIS_TOKENS_STAGING existing
-         WHERE existing.MONERIS_TOKEN = m.MONERIS_TOKEN
-           AND existing.FILE_ID != @fileId
-           AND existing.MIGRATION_STATUS = 'COMPLETED'
-       )`,
-    { fileId }
-  );
-
-  const duplicateTokens = result.recordset;
-
-  if (duplicateTokens.length > 0) {
-    // Bulk update duplicates
-    const duplicateUpdates = duplicateTokens.map(token => ({
-      ID: token.ID,
-      VALIDATION_STATUS: 'DUPLICATE',
-      ERROR_CODE: ValidationErrors.DUPLICATE_IN_PHUB,
-    }));
-
-    await bulkUpdate(
-      'MONERIS_TOKENS_STAGING',
-      'ID',
-      duplicateUpdates,
-      ['VALIDATION_STATUS', 'ERROR_CODE']
-    );
-
-    logger.info('Found existing tokens in Payment Hub', { count: duplicateTokens.length });
-  }
-
-  return duplicateTokens.length;
-}
+// Note: checkExistingTokens function moved to duplicateDetectionService.ts
+// Issue #42 FIX: Now checks PMR_MONERIS_MAPPING instead of MONERIS_TOKENS_STAGING
 
 /**
  * Insert audit log entry

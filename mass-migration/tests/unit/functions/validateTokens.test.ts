@@ -436,12 +436,14 @@ describe('validateTokens - Error message recording in MIGRATION_ERROR_DETAILS', 
         if (query.includes('SELECT ID, MONERIS_TOKEN') && query.includes('VALIDATION_STATUS = \'PENDING\'')) {
           return Promise.resolve({ recordset: allTokens });
         }
-        // Second query: checkExistingTokens - return all 32 valid tokens as duplicates in Payment Hub
-        if (query.includes('SELECT m.ID, m.MONERIS_TOKEN') && query.includes('EXISTS')) {
+        // Second query: checkExistingTokensInPaymentHub - return all 32 valid tokens as duplicates in Payment Hub
+        // Issue #42: Now checks PMR_MONERIS_MAPPING instead of MONERIS_TOKENS_STAGING
+        if (query.includes('PMR_MONERIS_MAPPING') || query.includes('SELECT m.ID, m.MONERIS_TOKEN') && query.includes('EXISTS')) {
           return Promise.resolve({
             recordset: validTokensThatAreDuplicatesInPHub.map(t => ({
               ID: t.ID,
               MONERIS_TOKEN: t.MONERIS_TOKEN,
+              PMR: '8' + t.MONERIS_TOKEN.substring(1), // Add PMR for new query format
             })),
           });
         }
@@ -523,8 +525,14 @@ describe('validateTokens - Error message recording in MIGRATION_ERROR_DETAILS', 
         if (query.includes('SELECT ID, MONERIS_TOKEN') && query.includes('VALIDATION_STATUS = \'PENDING\'')) {
           return Promise.resolve({ recordset: tokens });
         }
-        if (query.includes('SELECT m.ID, m.MONERIS_TOKEN') && query.includes('EXISTS')) {
-          return Promise.resolve({ recordset: pHubDuplicates });
+        // Issue #42: Now checks PMR_MONERIS_MAPPING instead of MONERIS_TOKENS_STAGING
+        if (query.includes('PMR_MONERIS_MAPPING') || query.includes('SELECT m.ID, m.MONERIS_TOKEN') && query.includes('EXISTS')) {
+          return Promise.resolve({
+            recordset: pHubDuplicates.map(t => ({
+              ...t,
+              PMR: '8' + t.MONERIS_TOKEN.substring(1), // Add PMR for new query format
+            })),
+          });
         }
         return Promise.resolve({ recordset: [], rowsAffected: [1] });
       });

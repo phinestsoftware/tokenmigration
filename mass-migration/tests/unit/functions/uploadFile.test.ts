@@ -313,7 +313,8 @@ describe('uploadFile - Bug #43: MC response should create its own batch record',
       // Verify the batch record has correct attributes
       const batchInsert = batchInserts[0];
       expect(batchInsert).toBeDefined();
-      expect(batchInsert.params.context).toBe('PG');
+      // CONTEXT is hardcoded as 'MassMigPG' in the SQL, not passed as a parameter
+      expect(batchInsert.query).toContain('MassMigPG');
       expect(batchInsert.params.fileName).toContain('mc.response');
     });
 
@@ -377,7 +378,8 @@ describe('uploadFile - Bug #43: MC response should create its own batch record',
       expect(batchInserts.length).toBeGreaterThan(0);
 
       const batchInsert = batchInserts[0];
-      expect(batchInsert.params.context).toBe('PG');
+      // CONTEXT is hardcoded as 'MassMigPG' in the SQL, not passed as a parameter
+      expect(batchInsert.query).toContain('MassMigPG');
     });
   });
 });
