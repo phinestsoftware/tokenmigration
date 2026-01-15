@@ -149,3 +149,25 @@ module "communication_services" {
   resource_suffix     = local.resource_suffix
   tags                = local.common_tags
 }
+
+# Get Function App keys for Event Grid webhook authentication
+data "azurerm_function_app_host_keys" "main" {
+  name                = module.function_app.function_app_name
+  resource_group_name = azurerm_resource_group.main.name
+}
+
+# Event Grid Module (for large file processing via HTTP trigger)
+# This module depends on both storage and function_app, avoiding circular dependency
+module "event_grid" {
+  source = "./modules/event-grid"
+
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  environment         = var.environment
+  project_name        = var.project_name
+  storage_account_id  = module.storage.storage_account_id
+  function_app_url    = module.function_app.function_app_url
+  function_app_key    = data.azurerm_function_app_host_keys.main.default_function_key
+  containers          = ["billing-input", "mastercard-mapping"]
+  tags                = local.common_tags
+}

@@ -65,3 +65,8 @@ output "blob_containers" {
   description = "Created blob containers"
   value       = module.storage.container_names
 }
+
+output "event_grid_topic_id" {
+  description = "Event Grid System Topic ID"
+  value       = module.event_grid.system_topic_id
+}

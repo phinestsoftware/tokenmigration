@@ -200,3 +200,44 @@ export function parseBlobPath(blobPath: string): {
 export function getBlobClient(containerName: string, blobName: string): BlockBlobClient {
   return getContainerClient(containerName).getBlockBlobClient(blobName);
 }
+
+/**
+ * Get blob properties (size, etc.) without downloading
+ */
+export async function getBlobProperties(
+  containerName: string,
+  blobName: string
+): Promise<{ contentLength: number; lastModified?: Date; contentType?: string }> {
+  const containerClient = getContainerClient(containerName);
+  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+  const properties = await blockBlobClient.getProperties();
+
+  return {
+    contentLength: properties.contentLength || 0,
+    lastModified: properties.lastModified,
+    contentType: properties.contentType,
+  };
+}
+
+/**
+ * Get a readable stream for a blob - for streaming large files
+ * This allows processing the blob without loading it entirely into memory
+ */
+export async function getBlobStream(
+  containerName: string,
+  blobName: string
+): Promise<NodeJS.ReadableStream> {
+  const containerClient = getContainerClient(containerName);
+  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+  const response = await blockBlobClient.download(0);
+
+  if (!response.readableStreamBody) {
+    throw new Error(`Failed to get stream for blob: ${blobName}`);
+  }
+
+  logger.info('Blob stream opened', { containerName, blobName });
+
+  return response.readableStreamBody;
+}

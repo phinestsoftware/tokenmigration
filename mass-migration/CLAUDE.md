@@ -61,24 +61,43 @@ az monitor app-insights query \
   --analytics-query "traces | where message contains 'Failed' | order by timestamp desc | take 10" --output json
 ```
 
-## Important: Keep Azure & Terraform in Sync!
-**EVERY TIME** you change settings in Azure via CLI (az commands), you **MUST** also update the corresponding Terraform files. Otherwise, the next `terraform apply` will revert your changes!
+## CRITICAL: All Infrastructure Changes via Terraform Only!
 
-Examples:
-- Changed Node version? Update `infra/modules/function-app/main.tf` → `node_version`
-- Added app settings? Update `app_settings` block in Terraform
-- Changed SKU? Update Terraform
+**NEVER** make infrastructure changes directly via Azure CLI or Azure Portal. **ALWAYS** use Terraform.
+
+### Why?
+- Direct Azure changes get **overwritten** on next `terraform apply`
+- Terraform is the source of truth for infrastructure
+- Changes via CLI cause drift and debugging nightmares
+
+### How to make infrastructure changes:
+1. Edit the appropriate Terraform file in `infra/` or `infra/modules/`
+2. Run `terraform plan` to preview changes
+3. Run `terraform apply` to apply changes
+
+### Common Terraform files:
+| Change | File |
+|--------|------|
+| Function App settings | `infra/modules/function-app/main.tf` → `app_settings` |
+| Node version | `infra/modules/function-app/main.tf` → `node_version` |
+| Storage containers/queues | `infra/modules/storage/main.tf` |
+| SQL database settings | `infra/modules/sql-database/main.tf` |
+| Event Grid subscriptions | `infra/modules/storage/main.tf` |
+| App Insights | `infra/modules/application-insights/main.tf` |
+
+### Exception: Debugging only
+The only acceptable use of `az` CLI for changes is **temporary debugging** (e.g., disabling a function temporarily). Even then, revert manually or via Terraform after debugging.
 
 ## Common Issues and Fixes
 
 ### Issue 1: "crypto is not defined" Error
 **Symptom:** Queue messages fail to send with `ReferenceError: crypto is not defined`
 **Cause:** Azure Functions Node 18 runtime doesn't have global `crypto.randomUUID()`
-**Fix:** Upgrade to Node 20:
-```bash
-az functionapp config set --name <function-app-name> --resource-group <rg> --linux-fx-version "Node|20"
+**Fix:** Update `infra/modules/function-app/main.tf`:
+```hcl
+node_version = "~20"
 ```
-Also update Terraform `node_version = "~20"` in function-app module.
+Then run `terraform apply`.
 
 ### Issue 2: Bulk Insert BCP Column Type Error
 **Symptom:** `Invalid column type from bcp client for colid 1`
@@ -88,7 +107,16 @@ Also update Terraform `node_version = "~20"` in function-app module.
 ### Issue 3: SQL Configuration Missing
 **Symptom:** `Configuration validation failed: SQL_SERVER: Required`
 **Cause:** Function App needs individual SQL settings, not just connection string
-**Fix:** Add these app settings: `SQL_SERVER`, `SQL_DATABASE`, `SQL_USER`, `SQL_PASSWORD`, `SQL_ENCRYPT`, `SQL_TRUST_SERVER_CERTIFICATE`
+**Fix:** Add to `infra/modules/function-app/main.tf` in the `app_settings` block:
+```hcl
+SQL_SERVER                    = var.sql_server_fqdn
+SQL_DATABASE                  = var.sql_database_name
+SQL_USER                      = var.sql_admin_username
+SQL_PASSWORD                  = var.sql_admin_password
+SQL_ENCRYPT                   = "true"
+SQL_TRUST_SERVER_CERTIFICATE  = "false"
+```
+Then run `terraform apply`.
 
 ## Build and Deploy Commands
 
@@ -169,14 +197,47 @@ MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_D
 Format: `{TRANSACTION_COUNT},{TIMESTAMP}` (e.g., `0000001033,20251208141500`)
 
 ## Function Flow
-1. **uploadFileBilling** (blob trigger) → loads file to staging
+1. **uploadFileBilling** (blob trigger) → loads file to staging (small files)
+   **uploadFileEventGrid** (HTTP trigger) → loads file via streaming (large files - Event Grid)
 2. **validateTokens** (queue) → validates tokens
 3. **createBatch** (queue) → calculates batch metadata
 4. **fileGen** (queue) → generates Mastercard input file, triggers mock (dev)
 5. **uploadFileMastercard** (blob trigger) → processes MC response, loads PG tokens
+   **uploadFileEventGrid** (HTTP trigger) → processes MC response via streaming (large files)
 6. **batchManager** (queue) → assigns tokens to batches
 7. **batchWorker** (queue) → processes each batch, joins Moneris + PG tokens
 8. **generateBillingFile** (queue/HTTP) → generates output files
+
+## Large File Processing (Event Grid + HTTP Trigger)
+
+For files larger than ~500MB, the blob trigger runs out of memory because it loads the entire file into memory before passing it to our code. The solution is to use Event Grid + HTTP trigger which allows streaming.
+
+### How it works
+1. Event Grid monitors blob storage for new files
+2. When a file is uploaded, Event Grid sends a notification to our HTTP endpoint
+3. Our code opens a **stream** to the blob (doesn't load into memory)
+4. CSV is parsed row-by-row as data streams in
+5. Records are inserted to database in batches of 5000
+
+### Event Grid Setup (Automatic via Terraform)
+Event Grid is automatically created by Terraform (`infra/modules/event-grid/main.tf`).
+
+The Terraform creates:
+- Event Grid System Topic on the storage account
+- Subscription for `billing-input` container → `/api/upload/event-grid`
+- Subscription for `mastercard-mapping` container → `/api/upload/event-grid`
+
+### Disable Blob Triggers (for large file processing)
+When using Event Grid for large files, disable blob triggers to avoid double-processing.
+
+Add to `infra/modules/function-app/main.tf` in the `app_settings` block:
+```hcl
+"AzureWebJobs.uploadFileBilling.Disabled"    = "true"
+"AzureWebJobs.uploadFileMastercard.Disabled" = "true"
+```
+Then run `terraform apply`.
+
+To re-enable, remove those lines and run `terraform apply` again.
 
 ## Mock Mastercard Flow (Dev Environment)
 

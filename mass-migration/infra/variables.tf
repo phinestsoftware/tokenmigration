@@ -78,3 +78,4 @@ variable "email_to" {
   type        = string
   default     = "lamba.tajinder@gmail.com,neeraj.kumar@digitalsarthi.ca,vrushali@digitalsarthi.com"
 }
+

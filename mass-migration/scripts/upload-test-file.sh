@@ -10,7 +10,7 @@
 set -e
 
 # Configuration
-FUNCTION_APP="func-tokenmigration-dev-oqt29j"
+FUNCTION_APP="func-tokenmigration-dev-941olb"
 RESOURCE_GROUP="rg-tokenmigration-dev"
 CONTAINER="billing-input"
 SOURCE_FOLDER="V21"

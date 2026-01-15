@@ -22,6 +22,7 @@ variable "tags" {
   type = map(string)
 }
 
+
 # Storage Account
 resource "azurerm_storage_account" "main" {
   name                     = "st${substr(var.project_name, 0, 8)}${var.resource_suffix}"
@@ -102,6 +103,7 @@ resource "azurerm_storage_queue" "billing_file" {
   storage_account_name = azurerm_storage_account.main.name
 }
 
+
 # Outputs
 output "storage_account_name" {
   value = azurerm_storage_account.main.name
@@ -136,3 +138,8 @@ output "queue_names" {
     billing_file    = azurerm_storage_queue.billing_file.name
   }
 }
+
+output "storage_account_id" {
+  value = azurerm_storage_account.main.id
+}
+

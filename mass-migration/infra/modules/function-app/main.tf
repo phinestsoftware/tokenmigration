@@ -126,7 +126,9 @@ resource "azurerm_linux_function_app" "main" {
   app_settings = {
     "FUNCTIONS_WORKER_RUNTIME"       = "node"
     "WEBSITE_NODE_DEFAULT_VERSION"   = "~20"
+    # CLI deployment settings for Premium plan
     "WEBSITE_RUN_FROM_PACKAGE"       = "1"
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "true"
 
     # Storage
     "STORAGE_CONNECTION_STRING"      = var.storage_connection_string
@@ -160,7 +162,7 @@ resource "azurerm_linux_function_app" "main" {
     "MAX_ACTIVE_WORKERS"             = "10"
 
     # Features
-    "MOCK_MASTERCARD_ENABLED"        = var.environment != "prod" ? "true" : "false"
+    "MOCK_MASTERCARD_ENABLED"        = "false"
     "EMAIL_ENABLED"                  = "true"
     "EMAIL_FROM"                     = var.email_from_address
     "EMAIL_TO"                       = var.email_to_address
