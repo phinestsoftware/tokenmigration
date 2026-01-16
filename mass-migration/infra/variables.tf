@@ -79,3 +79,23 @@ variable "email_to" {
   default     = "lamba.tajinder@gmail.com,neeraj.kumar@digitalsarthi.ca,vrushali@digitalsarthi.com"
 }
 
+# Dynatrace OpenTelemetry Integration
+variable "dynatrace_enabled" {
+  description = "Enable Dynatrace OpenTelemetry tracing (true/false)"
+  type        = string
+  default     = "false"
+}
+
+variable "dt_api_url" {
+  description = "Dynatrace API URL for OTLP ingest (e.g., https://{env-id}.live.dynatrace.com/api/v2/otlp)"
+  type        = string
+  default     = ""
+}
+
+variable "dt_api_token" {
+  description = "Dynatrace API token with OpenTelemetry ingest scope"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+

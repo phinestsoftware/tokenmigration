@@ -85,6 +85,25 @@ variable "email_to_address" {
   default = ""
 }
 
+# Dynatrace OpenTelemetry Integration
+variable "dynatrace_enabled" {
+  type        = string
+  description = "Enable Dynatrace OpenTelemetry tracing"
+  default     = "false"
+}
+
+variable "dt_api_url" {
+  type        = string
+  description = "Dynatrace API URL for OTLP ingest (e.g., https://{env-id}.live.dynatrace.com/api/v2/otlp)"
+  default     = ""
+}
+
+variable "dt_api_token_secret_uri" {
+  type        = string
+  description = "Key Vault secret URI for Dynatrace API token"
+  default     = ""
+}
+
 # App Service Plan - Premium V3 for dedicated compute
 resource "azurerm_service_plan" "main" {
   name                = "asp-${var.project_name}-${var.environment}-premium"
@@ -167,6 +186,14 @@ resource "azurerm_linux_function_app" "main" {
     "EMAIL_FROM"                     = var.email_from_address
     "EMAIL_TO"                       = var.email_to_address
     "ACS_CONNECTION_STRING"          = var.acs_connection_string
+
+    # Dynatrace OpenTelemetry Integration
+    "DYNATRACE_ENABLED"              = var.dynatrace_enabled
+    "DT_API_URL"                     = var.dt_api_url
+    # Use Key Vault reference for API token (format: @Microsoft.KeyVault(SecretUri=...))
+    "DT_API_TOKEN"                   = var.dt_api_token_secret_uri != "" ? "@Microsoft.KeyVault(SecretUri=${var.dt_api_token_secret_uri})" : ""
+    "DT_SERVICE_NAME"                = "mass-migration"
+    "DT_SERVICE_VERSION"             = "1.0.0"
   }
 
   tags = var.tags

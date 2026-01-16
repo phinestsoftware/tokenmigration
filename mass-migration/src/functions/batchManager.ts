@@ -1,3 +1,6 @@
+// Initialize Dynatrace tracing before other imports
+import '../index.js';
+
 import { app, InvocationContext } from '@azure/functions';
 import { v4 as uuidv4 } from 'uuid';
 import { getConfig } from '../config/index.js';

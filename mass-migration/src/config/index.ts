@@ -41,6 +41,13 @@ const envSchema = z.object({
   // Mock Services
   MOCK_MASTERCARD_ENABLED: z.string().transform((val) => val === 'true').default('false'),
   MOCK_MASTERCARD_DELAY_MS: z.string().transform(Number).default('1000'),
+
+  // Dynatrace OpenTelemetry Integration
+  DYNATRACE_ENABLED: z.string().transform((val) => val === 'true').default('false'),
+  DT_API_URL: z.string().optional(), // e.g., https://{your-environment-id}.live.dynatrace.com/api/v2/otlp
+  DT_API_TOKEN: z.string().optional(), // OpenTelemetry ingest token
+  DT_SERVICE_NAME: z.string().default('mass-migration'),
+  DT_SERVICE_VERSION: z.string().default('1.0.0'),
 });
 
 export type Config = z.infer<typeof envSchema>;
