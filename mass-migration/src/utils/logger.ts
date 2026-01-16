@@ -1,4 +1,5 @@
 import { InvocationContext } from '@azure/functions';
+import { trace } from '@opentelemetry/api';
 
 export enum LogLevel {
   DEBUG = 'DEBUG',
@@ -15,6 +16,11 @@ export interface LogEntry {
   fileId?: string;
   batchId?: string;
   functionName?: string;
+  // Dynatrace trace context for log correlation
+  dt?: {
+    traceId?: string;
+    spanId?: string;
+  };
 }
 
 export class Logger {
@@ -38,7 +44,7 @@ export class Logger {
   }
 
   private formatMessage(level: LogLevel, message: string, data?: Record<string, unknown>): LogEntry {
-    return {
+    const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
       message,
@@ -47,6 +53,20 @@ export class Logger {
       batchId: this.batchId,
       functionName: this.functionName,
     };
+
+    // Add Dynatrace trace context for log correlation if available
+    const activeSpan = trace.getActiveSpan();
+    if (activeSpan) {
+      const spanContext = activeSpan.spanContext();
+      if (spanContext.traceId && spanContext.spanId) {
+        entry.dt = {
+          traceId: spanContext.traceId,
+          spanId: spanContext.spanId,
+        };
+      }
+    }
+
+    return entry;
   }
 
   private log(level: LogLevel, message: string, data?: Record<string, unknown>): void {

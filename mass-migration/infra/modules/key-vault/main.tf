@@ -32,6 +32,13 @@ variable "storage_connection_string" {
   sensitive = true
 }
 
+variable "dt_api_token" {
+  type        = string
+  description = "Dynatrace API token for OpenTelemetry ingest"
+  sensitive   = true
+  default     = ""
+}
+
 variable "tags" {
   type = map(string)
 }
@@ -84,6 +91,16 @@ resource "azurerm_key_vault_secret" "storage_connection" {
   depends_on = [azurerm_role_assignment.deployer_secrets]
 }
 
+# Store Dynatrace API Token (only if provided)
+resource "azurerm_key_vault_secret" "dt_api_token" {
+  count        = var.dt_api_token != "" ? 1 : 0
+  name         = "dt-api-token"
+  value        = var.dt_api_token
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.deployer_secrets]
+}
+
 # Outputs
 output "name" {
   value = azurerm_key_vault.main.name
@@ -95,4 +112,9 @@ output "uri" {
 
 output "id" {
   value = azurerm_key_vault.main.id
+}
+
+output "dt_api_token_secret_uri" {
+  value       = var.dt_api_token != "" ? azurerm_key_vault_secret.dt_api_token[0].versionless_id : ""
+  description = "Key Vault secret URI for Dynatrace API token (for Key Vault reference)"
 }

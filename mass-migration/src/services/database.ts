@@ -483,19 +483,16 @@ export async function bulkInsertMcResponse(
           t.expiryMonth,
           t.expiryYear,
           t.result,
-          -- Derived: FIRST_SIX (first 6 non-x chars)
           CASE
             WHEN t.cardNumber IS NOT NULL AND LEN(REPLACE(t.cardNumber, 'x', '')) >= 10
             THEN LEFT(REPLACE(t.cardNumber, 'x', ''), 6)
             ELSE NULL
           END,
-          -- Derived: LAST_FOUR (last 4 non-x chars)
           CASE
             WHEN t.cardNumber IS NOT NULL AND LEN(REPLACE(t.cardNumber, 'x', '')) >= 10
             THEN RIGHT(REPLACE(t.cardNumber, 'x', ''), 4)
             ELSE NULL
           END,
-          -- Derived: CC_CARD_BRAND (RTRIM handles \r if file has \r\n line endings)
           CASE UPPER(RTRIM(t.cardScheme))
             WHEN 'VISA' THEN 'V'
             WHEN 'MASTERCARD' THEN 'M'

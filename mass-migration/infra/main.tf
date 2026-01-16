@@ -112,6 +112,10 @@ module "function_app" {
   acs_connection_string        = module.communication_services.primary_connection_string
   email_from_address           = module.communication_services.email_from_address
   email_to_address             = var.email_to
+  # Dynatrace OpenTelemetry Integration
+  dynatrace_enabled            = var.dynatrace_enabled
+  dt_api_url                   = var.dt_api_url
+  dt_api_token_secret_uri      = module.key_vault.dt_api_token_secret_uri
   tags                         = local.common_tags
 }
 
@@ -138,6 +142,7 @@ module "key_vault" {
   function_app_identity_id = module.function_app.identity_principal_id
   sql_connection_string = module.sql_database.connection_string
   storage_connection_string = module.storage.storage_connection_string
+  dt_api_token         = var.dt_api_token
   tags                 = local.common_tags
 }
 
