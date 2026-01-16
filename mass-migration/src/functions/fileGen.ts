@@ -1,6 +1,3 @@
-// Initialize Dynatrace tracing before other imports
-import '../index.js';
-
 import { app, InvocationContext } from '@azure/functions';
 import { getConfig } from '../config/index.js';
 import { createLogger, Logger } from '../utils/logger.js';
