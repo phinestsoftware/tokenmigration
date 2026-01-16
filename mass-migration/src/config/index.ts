@@ -26,6 +26,7 @@ const envSchema = z.object({
   BATCH_MANAGER_QUEUE: z.string().default('batch-manager-queue'),
   BATCH_WORKER_QUEUE: z.string().default('batch-worker-queue'),
   BILLING_FILE_QUEUE: z.string().default('billing-file-queue'),
+  MC_RESPONSE_QUEUE: z.string().default('mc-response-queue'),
 
   // Migration Settings
   DEFAULT_BATCH_SIZE: z.string().transform(Number).default('1000'),

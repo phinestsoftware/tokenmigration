@@ -71,6 +71,14 @@ export interface BillingFileMessage {
   endDate?: string;
 }
 
+export interface McResponseMessage {
+  containerName: string;
+  blobName: string;
+  fileName: string;
+  fileId: string;
+  contentLength: number;
+}
+
 export async function sendMessage<T>(queueName: string, message: T): Promise<string> {
   const queueClient = getQueueClient(queueName);
 
@@ -150,6 +158,7 @@ export function getQueueNames(): {
   batchManager: string;
   batchWorker: string;
   billingFile: string;
+  mcResponse: string;
 } {
   const config = getConfig();
   return {
@@ -159,6 +168,7 @@ export function getQueueNames(): {
     batchManager: config.BATCH_MANAGER_QUEUE,
     batchWorker: config.BATCH_WORKER_QUEUE,
     billingFile: config.BILLING_FILE_QUEUE,
+    mcResponse: config.MC_RESPONSE_QUEUE,
   };
 }
 
@@ -185,4 +195,8 @@ export async function queueBatchWorker(message: BatchWorkerMessage): Promise<str
 
 export async function queueBillingFile(message: BillingFileMessage): Promise<string> {
   return sendMessage(getQueueNames().billingFile, message);
+}
+
+export async function queueMcResponse(message: McResponseMessage): Promise<string> {
+  return sendMessage(getQueueNames().mcResponse, message);
 }

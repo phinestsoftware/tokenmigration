@@ -43,13 +43,15 @@ async function batchManagerHandler(
     const validTokenCount = batchInfoResult.recordset[0]?.VALID_TOKEN_COUNT ?? 0;
 
     // Get all valid Moneris tokens that:
-    // 1. Haven't been assigned to a batch yet
-    // 2. Have corresponding PG tokens available (via MONERIS_TOKEN correlation)
+    // 1. Belong to this file
+    // 2. Haven't been assigned to a batch yet
+    // 3. Have corresponding PG tokens available (via MONERIS_TOKEN correlation)
     // Per DDD: correlationId in MC response = MONERIS_TOKEN, so join on MONERIS_TOKEN not FILE_ID
     const tokensResult = await executeQuery<{ ID: number; MONERIS_FILE_ID: string }>(
       `SELECT m.ID, m.FILE_ID as MONERIS_FILE_ID
        FROM MONERIS_TOKENS_STAGING m
-       WHERE m.VALIDATION_STATUS = 'VALID'
+       WHERE m.FILE_ID = @fileId
+         AND m.VALIDATION_STATUS = 'VALID'
          AND m.BATCH_ID IS NULL
          AND EXISTS (
            SELECT 1 FROM PG_TOKENS_STAGING p
@@ -57,7 +59,7 @@ async function batchManagerHandler(
              AND p.MONERIS2PG_MIGRATION_STATUS = 'SUCCESS'
          )
        ORDER BY m.ID`,
-      {}
+      { fileId }
     );
 
     const tokenIds = tokensResult.recordset.map((r) => r.ID);

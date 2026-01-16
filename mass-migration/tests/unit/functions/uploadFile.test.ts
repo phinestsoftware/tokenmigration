@@ -1,15 +1,16 @@
 /**
- * Unit tests for uploadFile function (Event Grid HTTP trigger)
+ * Unit tests for uploadFile function (Queue trigger for Event Grid)
  * Tests batch record creation and file processing
  */
 
-import { HttpRequest, InvocationContext } from '@azure/functions';
+import { InvocationContext } from '@azure/functions';
 import { Readable } from 'stream';
 
 // Mock the database service BEFORE importing uploadFile
 jest.mock('../../../src/services/database', () => ({
   executeQuery: jest.fn().mockResolvedValue({ recordset: [], rowsAffected: [0] }),
   bulkInsertValues: jest.fn().mockResolvedValue(0),
+  bulkInsertMcResponse: jest.fn().mockResolvedValue({ rowsInserted: 0, rowsUpdated: 0 }),
 }));
 
 // Mock the queue service
@@ -31,6 +32,14 @@ jest.mock('../../../src/services/blobStorage', () => ({
   getBlobProperties: jest.fn().mockResolvedValue({ contentLength: 100 }),
 }));
 
+// Mock the config
+jest.mock('../../../src/config/index', () => ({
+  getConfig: jest.fn(() => ({
+    STORAGE_ACCOUNT_NAME: 'teststorage',
+    STORAGE_CONNECTION_STRING: 'test-connection-string',
+  })),
+}));
+
 // Mock the logger
 jest.mock('../../../src/utils/logger', () => ({
   createLogger: jest.fn(() => ({
@@ -45,12 +54,12 @@ jest.mock('../../../src/utils/logger', () => ({
   })),
 }));
 
-import { executeQuery } from '../../../src/services/database';
+import { executeQuery, bulkInsertMcResponse } from '../../../src/services/database';
 import { getBlobStream } from '../../../src/services/blobStorage';
-import { uploadFileHttpHandler } from '../../../src/functions/uploadFile';
+import { uploadFileQueueHandler } from '../../../src/functions/uploadFile';
 import { AuditMessageCodes } from '../../../src/models/migrationBatch';
 
-describe('uploadFile (Event Grid HTTP trigger)', () => {
+describe('uploadFile (Queue trigger for Event Grid)', () => {
   let dbCalls: Array<{ query: string; params: Record<string, unknown> }> = [];
 
   beforeEach(() => {
@@ -65,30 +74,16 @@ describe('uploadFile (Event Grid HTTP trigger)', () => {
   });
 
   /**
-   * Helper to create a mock HttpRequest for Event Grid validation
+   * Helper to create Event Grid queue message for blob created event
    */
-  function createValidationRequest(): HttpRequest {
-    const validationEvent = [{
-      id: 'test-id',
-      eventType: 'Microsoft.EventGrid.SubscriptionValidationEvent',
-      data: {
-        validationCode: 'test-validation-code',
-      },
-    }];
+  function createBlobCreatedQueueMessage(containerName: string, blobName: string, csvContent: string): unknown {
+    // Mock getBlobStream to return the CSV content as a stream
+    (getBlobStream as jest.Mock).mockImplementation(() => {
+      return Promise.resolve(Readable.from(Buffer.from(csvContent)));
+    });
 
+    // Event Grid message format when delivered via Storage Queue
     return {
-      method: 'POST',
-      url: 'https://func.azurewebsites.net/api/upload/event-grid',
-      headers: new Map([['aeg-event-type', 'SubscriptionValidation']]),
-      json: jest.fn().mockResolvedValue(validationEvent),
-    } as unknown as HttpRequest;
-  }
-
-  /**
-   * Helper to create a mock HttpRequest for blob created event
-   */
-  function createBlobCreatedRequest(containerName: string, blobName: string, csvContent: string): HttpRequest {
-    const event = [{
       id: 'test-event-id',
       eventType: 'Microsoft.Storage.BlobCreated',
       subject: `/blobServices/default/containers/${containerName}/blobs/${blobName}`,
@@ -96,19 +91,9 @@ describe('uploadFile (Event Grid HTTP trigger)', () => {
         url: `https://storage.blob.core.windows.net/${containerName}/${blobName}`,
         contentLength: csvContent.length,
       },
-    }];
-
-    // Mock getBlobStream to return the CSV content as a stream
-    (getBlobStream as jest.Mock).mockImplementation(() => {
-      return Promise.resolve(Readable.from(Buffer.from(csvContent)));
-    });
-
-    return {
-      method: 'POST',
-      url: 'https://func.azurewebsites.net/api/upload/event-grid',
-      headers: new Map([['aeg-event-type', 'Notification']]),
-      json: jest.fn().mockResolvedValue(event),
-    } as unknown as HttpRequest;
+      dataVersion: '',
+      metadataVersion: '1',
+    };
   }
 
   /**
@@ -145,20 +130,6 @@ describe('uploadFile (Event Grid HTTP trigger)', () => {
     );
   }
 
-  describe('Event Grid subscription validation', () => {
-    it('should respond with validationResponse for subscription validation', async () => {
-      const request = createValidationRequest();
-      const context = createMockContext();
-
-      const response = await uploadFileHttpHandler(request, context);
-
-      expect(response.status).toBe(200);
-      expect(response.jsonBody).toEqual({
-        validationResponse: 'test-validation-code',
-      });
-    });
-  });
-
   describe('Billing file processing', () => {
     it('should create audit log and batch record for valid billing file', async () => {
       const validCsvContent = [
@@ -166,12 +137,10 @@ describe('uploadFile (Event Grid HTTP trigger)', () => {
         '9518050018246830,0139,E10001,1,O,20240115,20241201,,,',
       ].join('\n');
 
-      const request = createBlobCreatedRequest('billing-input', 'V21/V21.P.20260113.0001.input', validCsvContent);
+      const queueMessage = createBlobCreatedQueueMessage('billing-input', 'V21/V21.P.20260113.0001.input', validCsvContent);
       const context = createMockContext();
 
-      const response = await uploadFileHttpHandler(request, context);
-
-      expect(response.status).toBe(200);
+      await uploadFileQueueHandler(queueMessage, context);
 
       // Verify audit log was created
       const auditInserts = getAuditLogInserts();
@@ -185,13 +154,11 @@ describe('uploadFile (Event Grid HTTP trigger)', () => {
     it('should reject file with invalid headers', async () => {
       const invalidCsvContent = 'WRONG_COL1,WRONG_COL2\ndata1,data2';
 
-      const request = createBlobCreatedRequest('billing-input', 'V21/V21.P.20260113.0002.input', invalidCsvContent);
+      const queueMessage = createBlobCreatedQueueMessage('billing-input', 'V21/V21.P.20260113.0002.input', invalidCsvContent);
       const context = createMockContext();
 
-      const response = await uploadFileHttpHandler(request, context);
-
-      // Should return error status
-      expect(response.status).toBeGreaterThanOrEqual(400);
+      // Should throw for queue trigger (triggers retry)
+      await expect(uploadFileQueueHandler(queueMessage, context)).rejects.toThrow();
 
       // Should still create audit log with FILE_REJECTED
       const auditInserts = getAuditLogInserts();
@@ -203,40 +170,122 @@ describe('uploadFile (Event Grid HTTP trigger)', () => {
   });
 
   describe('Mastercard response file processing', () => {
-    it('should create batch record for MC response file', async () => {
+    it('should call bulkInsertMcResponse for MC response file', async () => {
       const mcResponseCsv = [
         'apiOperation,correlationId,sourceOfFunds.type,sourceOfFunds.provided.card.number,sourceOfFunds.provided.card.expiry.month,sourceOfFunds.provided.card.expiry.year,result,error.cause,error.explanation,error.field,error.supportCode,error.validationType,token,schemeToken.status,sourceOfFunds.provided.card.fundingMethod,sourceOfFunds.provided.card.expiry,sourceOfFunds.provided.card.scheme',
         ',9518050018246830,CARD,411111******1111,,,SUCCESS,,,,,9876543210123456,ACTIVE,CREDIT,1226,VISA',
       ].join('\n');
 
-      const request = createBlobCreatedRequest('mastercard-mapping', 'V21.P.20260114.0001.mc.response', mcResponseCsv);
+      const queueMessage = createBlobCreatedQueueMessage('mastercard-mapping', 'V21.P.20260114.0001.mc.response', mcResponseCsv);
       const context = createMockContext();
 
-      const response = await uploadFileHttpHandler(request, context);
+      await uploadFileQueueHandler(queueMessage, context);
 
-      expect(response.status).toBe(200);
+      // Verify bulkInsertMcResponse was called
+      expect(bulkInsertMcResponse).toHaveBeenCalledWith(
+        'mastercard-mapping',
+        'V21.P.20260114.0001.mc.response',
+        expect.any(String)
+      );
+    });
 
-      // MC response should also create a batch record
+    it('should parse FILE_ID from MC response filename', async () => {
+      const mcResponseCsv = [
+        'apiOperation,correlationId,sourceOfFunds.type,sourceOfFunds.provided.card.number,sourceOfFunds.provided.card.expiry.month,sourceOfFunds.provided.card.expiry.year,result,error.cause,error.explanation,error.field,error.supportCode,error.validationType,token,schemeToken.status,sourceOfFunds.provided.card.fundingMethod,sourceOfFunds.provided.card.expiry,sourceOfFunds.provided.card.scheme',
+        ',9518050018246830,CARD,411111******1111,,,SUCCESS,,,,,9876543210123456,ACTIVE,CREDIT,1226,VISA',
+      ].join('\n');
+
+      const queueMessage = createBlobCreatedQueueMessage('mastercard-mapping', 'V21.P.20260114.0002.mc.response', mcResponseCsv);
+      const context = createMockContext();
+
+      await uploadFileQueueHandler(queueMessage, context);
+
+      // Verify bulkInsertMcResponse was called with correct fileId
+      expect(bulkInsertMcResponse).toHaveBeenCalledWith(
+        'mastercard-mapping',
+        'V21.P.20260114.0002.mc.response',
+        'V21.P.20260114.0002'
+      );
+    });
+  });
+
+  describe('Unknown container handling', () => {
+    it('should ignore blobs from unknown containers', async () => {
+      const csvContent = 'col1,col2\ndata1,data2';
+
+      const queueMessage = createBlobCreatedQueueMessage('unknown-container', 'test.csv', csvContent);
+      const context = createMockContext();
+
+      // Should complete without error but not process
+      await uploadFileQueueHandler(queueMessage, context);
+
+      // Should not create any database records
+      expect(dbCalls.length).toBe(0);
+    });
+  });
+
+  describe('Queue message parsing', () => {
+    it('should handle base64 encoded queue messages', async () => {
+      const validCsvContent = [
+        'MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT,USAGE_TYPE',
+        '9518050018246830,0139,E10001,1,O,20240115,20241201,,,',
+      ].join('\n');
+
+      // Mock getBlobStream
+      (getBlobStream as jest.Mock).mockImplementation(() => {
+        return Promise.resolve(Readable.from(Buffer.from(validCsvContent)));
+      });
+
+      // Event Grid message as base64 string (how Azure Queue sometimes delivers)
+      const event = {
+        id: 'test-event-id',
+        eventType: 'Microsoft.Storage.BlobCreated',
+        subject: '/blobServices/default/containers/billing-input/blobs/V21/test.csv',
+        data: {
+          url: 'https://storage.blob.core.windows.net/billing-input/V21/test.csv',
+          contentLength: validCsvContent.length,
+        },
+      };
+      const base64Message = Buffer.from(JSON.stringify(event)).toString('base64');
+
+      const context = createMockContext();
+
+      await uploadFileQueueHandler(base64Message, context);
+
+      // Verify processing happened
       const batchInserts = getBatchInserts();
       expect(batchInserts.length).toBeGreaterThan(0);
     });
 
-    it('should parse SOURCE_ID from MC response filename', async () => {
-      const mcResponseCsv = [
-        'apiOperation,correlationId,sourceOfFunds.type,sourceOfFunds.provided.card.number,sourceOfFunds.provided.card.expiry.month,sourceOfFunds.provided.card.expiry.year,result,error.cause,error.explanation,error.field,error.supportCode,error.validationType,token,schemeToken.status,sourceOfFunds.provided.card.fundingMethod,sourceOfFunds.provided.card.expiry,sourceOfFunds.provided.card.scheme',
-        ',9518050018246830,CARD,411111******1111,,,SUCCESS,,,,,9876543210123456,ACTIVE,CREDIT,1226,VISA',
+    it('should handle array-wrapped Event Grid messages', async () => {
+      const validCsvContent = [
+        'MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT,USAGE_TYPE',
+        '9518050018246830,0139,E10001,1,O,20240115,20241201,,,',
       ].join('\n');
 
-      const request = createBlobCreatedRequest('mastercard-mapping', 'V21.P.20260114.0002.mc.response', mcResponseCsv);
+      // Mock getBlobStream
+      (getBlobStream as jest.Mock).mockImplementation(() => {
+        return Promise.resolve(Readable.from(Buffer.from(validCsvContent)));
+      });
+
+      // Event Grid sometimes sends as array
+      const events = [{
+        id: 'test-event-id',
+        eventType: 'Microsoft.Storage.BlobCreated',
+        subject: '/blobServices/default/containers/billing-input/blobs/V21/test.csv',
+        data: {
+          url: 'https://storage.blob.core.windows.net/billing-input/V21/test.csv',
+          contentLength: validCsvContent.length,
+        },
+      }];
+
       const context = createMockContext();
 
-      await uploadFileHttpHandler(request, context);
+      await uploadFileQueueHandler(events, context);
 
+      // Verify processing happened
       const batchInserts = getBatchInserts();
       expect(batchInserts.length).toBeGreaterThan(0);
-
-      const batchInsert = batchInserts[0];
-      expect(batchInsert.params.sourceId).toBe('V21');
     });
   });
 });

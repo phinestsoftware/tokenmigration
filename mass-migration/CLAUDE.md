@@ -23,42 +23,38 @@ Azure Functions-based token migration service for Rogers. Processes billing file
 ## Debugging Best Practices
 
 ### IMPORTANT: Always Check Error Logs First!
-When something doesn't work in Azure Functions:
+When something doesn't work in Azure Functions, use the helper scripts instead of raw az commands:
 
-**Step 0: First, discover the correct App Insights name (it may change after Terraform/pipeline deployments):**
+**Preferred: Use query-logs.js script (handles App Insights discovery automatically):**
+```bash
+# Check recent exceptions
+node scripts/query-logs.js exceptions 30
+
+# Check errors for a specific file
+node scripts/query-logs.js errors V21.P.20260115.0005
+
+# Check MC response processing logs
+node scripts/query-logs.js mc-response V21.P.20260115.0013
+
+# Check recent traces
+node scripts/query-logs.js recent 10
+
+# Check timeout-related logs
+node scripts/query-logs.js timeouts 60
+
+# Run custom KQL query
+node scripts/query-logs.js custom "traces | where message contains 'BULK'"
+```
+
+**Alternative: Raw az CLI (if scripts unavailable):**
 ```bash
 # Get the App Insights resource name dynamically
 APP_INSIGHTS=$(az resource list --resource-group rg-tokenmigration-dev --resource-type "Microsoft.Insights/components" --query "[0].name" -o tsv)
-echo "App Insights name: $APP_INSIGHTS"
-```
 
-1. **Check Application Insights exceptions IMMEDIATELY:**
-```bash
-APP_INSIGHTS=$(az resource list --resource-group rg-tokenmigration-dev --resource-type "Microsoft.Insights/components" --query "[0].name" -o tsv)
-az monitor app-insights query \
-  --app "$APP_INSIGHTS" \
-  --resource-group rg-tokenmigration-dev \
+# Check exceptions
+az monitor app-insights query --app "$APP_INSIGHTS" --resource-group rg-tokenmigration-dev \
   --analytics-query "exceptions | where timestamp > ago(30m) | project timestamp, outerMessage, innermostMessage | order by timestamp desc | take 20" \
   --output json | jq -r '.tables[0].rows[]?'
-```
-
-2. **Check function execution traces:**
-```bash
-APP_INSIGHTS=$(az resource list --resource-group rg-tokenmigration-dev --resource-type "Microsoft.Insights/components" --query "[0].name" -o tsv)
-az monitor app-insights query \
-  --app "$APP_INSIGHTS" \
-  --resource-group rg-tokenmigration-dev \
-  --analytics-query "traces | where timestamp > ago(10m) | where message contains 'error' or message contains 'failed' | project timestamp, message, severityLevel | order by timestamp desc | take 30" \
-  --output json | jq -r '.tables[0].rows[]?'
-```
-
-3. **Check for "Failed" executions:**
-```bash
-APP_INSIGHTS=$(az resource list --resource-group rg-tokenmigration-dev --resource-type "Microsoft.Insights/components" --query "[0].name" -o tsv)
-az monitor app-insights query \
-  --app "$APP_INSIGHTS" \
-  --resource-group rg-tokenmigration-dev \
-  --analytics-query "traces | where message contains 'Failed' | order by timestamp desc | take 10" --output json
 ```
 
 ## CRITICAL: All Infrastructure Changes via Terraform Only!
@@ -343,6 +339,51 @@ node scripts/query-db.js custom "SELECT TOP 10 * FROM MONERIS_TOKENS_STAGING WHE
 | `recent-batches` | Last 20 batch records (no parameter needed) |
 | `pmr-mapping` | Check PMR_MONERIS_MAPPING for a Moneris token |
 | `custom` | Run any custom SQL query |
+
+### Query Application Insights Logs
+Use `scripts/query-logs.js` to check Azure Application Insights logs without needing to remember az CLI commands:
+
+```bash
+# Get traces for a specific file
+node scripts/query-logs.js traces V21.P.20260115.0005
+
+# Get errors for a specific file
+node scripts/query-logs.js errors V21.P.20260115.0005
+
+# Get MC response processing logs for a file
+node scripts/query-logs.js mc-response V21.P.20260115.0013
+
+# Get recent exceptions (default: 30 minutes)
+node scripts/query-logs.js exceptions 60
+
+# Get recent traces (default: 10 minutes)
+node scripts/query-logs.js recent 5
+
+# Get traces for a specific function
+node scripts/query-logs.js function uploadFileHttp
+
+# Get function executions (default: 30 minutes)
+node scripts/query-logs.js executions 30
+
+# Get timeout-related logs (default: 60 minutes)
+node scripts/query-logs.js timeouts 60
+
+# Run custom KQL query
+node scripts/query-logs.js custom "traces | where timestamp > ago(15m) | where message contains 'BULK'"
+```
+
+**Available query types:**
+| Query | Description |
+|-------|-------------|
+| `traces` | Get all traces for a specific file |
+| `errors` | Get errors for a specific file |
+| `exceptions` | Get recent exceptions |
+| `recent` | Get recent traces |
+| `function` | Get traces for a specific function name |
+| `executions` | Get function executions |
+| `timeouts` | Get timeout-related logs |
+| `mc-response` | Get MC response processing logs for a file |
+| `custom` | Run custom KQL query |
 
 ### Common Testing Mistakes to Avoid
 1. **Wrong upload path** - Always use `billing-input/{source}/filename` not `billing-input/filename`

@@ -23,23 +23,6 @@ variable "storage_account_id" {
   description = "Storage account resource ID for Event Grid system topic"
 }
 
-variable "function_app_url" {
-  type        = string
-  description = "Function App URL for Event Grid webhook endpoint"
-}
-
-variable "function_app_key" {
-  type        = string
-  description = "Function App default key for authentication"
-  sensitive   = true
-}
-
-variable "containers" {
-  type        = list(string)
-  description = "List of container names to create Event Grid subscriptions for"
-  default     = ["billing-input", "mastercard-mapping"]
-}
-
 # Event Grid System Topic for Storage Account
 resource "azurerm_eventgrid_system_topic" "storage" {
   name                   = "evgt-${var.project_name}-${var.environment}-storage"
@@ -51,21 +34,44 @@ resource "azurerm_eventgrid_system_topic" "storage" {
   tags = var.tags
 }
 
-# Event Grid Subscriptions for each container
-resource "azurerm_eventgrid_system_topic_event_subscription" "container" {
-  for_each            = toset(var.containers)
-  name                = "${each.value}-subscription"
+# Event Grid Subscription for billing-input (Storage Queue)
+resource "azurerm_eventgrid_system_topic_event_subscription" "billing_input_queue" {
+  name                = "billing-input-queue-subscription"
   system_topic        = azurerm_eventgrid_system_topic.storage.name
   resource_group_name = var.resource_group_name
 
-  webhook_endpoint {
-    url = "${var.function_app_url}/api/upload/event-grid?code=${var.function_app_key}"
+  storage_queue_endpoint {
+    storage_account_id = var.storage_account_id
+    queue_name         = "file-upload-queue"
   }
 
   included_event_types = ["Microsoft.Storage.BlobCreated"]
 
   subject_filter {
-    subject_begins_with = "/blobServices/default/containers/${each.value}/"
+    subject_begins_with = "/blobServices/default/containers/billing-input/"
+  }
+
+  retry_policy {
+    max_delivery_attempts = 30
+    event_time_to_live    = 1440 # 24 hours
+  }
+}
+
+# Event Grid Subscription for mastercard-mapping (Storage Queue)
+resource "azurerm_eventgrid_system_topic_event_subscription" "mc_response_queue" {
+  name                = "mastercard-mapping-queue-subscription"
+  system_topic        = azurerm_eventgrid_system_topic.storage.name
+  resource_group_name = var.resource_group_name
+
+  storage_queue_endpoint {
+    storage_account_id = var.storage_account_id
+    queue_name         = "file-upload-queue"
+  }
+
+  included_event_types = ["Microsoft.Storage.BlobCreated"]
+
+  subject_filter {
+    subject_begins_with = "/blobServices/default/containers/mastercard-mapping/"
   }
 
   retry_policy {
@@ -81,8 +87,4 @@ output "system_topic_id" {
 
 output "system_topic_name" {
   value = azurerm_eventgrid_system_topic.storage.name
-}
-
-output "subscription_ids" {
-  value = { for k, v in azurerm_eventgrid_system_topic_event_subscription.container : k => v.id }
 }

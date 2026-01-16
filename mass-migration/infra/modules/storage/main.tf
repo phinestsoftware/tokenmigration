@@ -103,6 +103,20 @@ resource "azurerm_storage_queue" "billing_file" {
   storage_account_name = azurerm_storage_account.main.name
 }
 
+resource "azurerm_storage_queue" "file_upload" {
+  name                 = "file-upload-queue"
+  storage_account_name = azurerm_storage_account.main.name
+}
+
+# Format file for BULK INSERT (maps CSV columns to temp table with IDENTITY)
+resource "azurerm_storage_blob" "mc_response_format_file" {
+  name                   = "mc_response_temp.fmt"
+  storage_account_name   = azurerm_storage_account.main.name
+  storage_container_name = azurerm_storage_container.mastercard_mapping.name
+  type                   = "Block"
+  source                 = "${path.module}/../../../format-files/mc_response_temp.fmt"
+}
+
 
 # Outputs
 output "storage_account_name" {
@@ -136,6 +150,7 @@ output "queue_names" {
     batch_manager   = azurerm_storage_queue.batch_manager.name
     batch_worker    = azurerm_storage_queue.batch_worker.name
     billing_file    = azurerm_storage_queue.billing_file.name
+    file_upload     = azurerm_storage_queue.file_upload.name
   }
 }
 

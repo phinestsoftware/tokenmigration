@@ -180,6 +180,9 @@ resource "azurerm_linux_function_app" "main" {
     "FAILURE_THRESHOLD_PERCENT"      = "50"
     "MAX_ACTIVE_WORKERS"             = "10"
 
+    # Node.js memory limit (4GB for large file processing)
+    "NODE_OPTIONS"                   = "--max-old-space-size=4096"
+
     # Features
     "MOCK_MASTERCARD_ENABLED"        = "false"
     "EMAIL_ENABLED"                  = "true"

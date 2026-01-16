@@ -78,14 +78,16 @@ module "storage" {
 module "sql_database" {
   source = "./modules/sql-database"
 
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  environment         = var.environment
-  project_name        = var.project_name
-  resource_suffix     = local.resource_suffix
-  sql_admin_username  = var.sql_admin_username
-  sql_admin_password  = var.sql_admin_password
-  tags                = local.common_tags
+  resource_group_name  = azurerm_resource_group.main.name
+  location             = azurerm_resource_group.main.location
+  environment          = var.environment
+  project_name         = var.project_name
+  resource_suffix      = local.resource_suffix
+  sql_admin_username   = var.sql_admin_username
+  sql_admin_password   = var.sql_admin_password
+  storage_account_name = module.storage.storage_account_name
+  storage_account_id   = module.storage.storage_account_id
+  tags                 = local.common_tags
 }
 
 # Function App Module
@@ -155,14 +157,8 @@ module "communication_services" {
   tags                = local.common_tags
 }
 
-# Get Function App keys for Event Grid webhook authentication
-data "azurerm_function_app_host_keys" "main" {
-  name                = module.function_app.function_app_name
-  resource_group_name = azurerm_resource_group.main.name
-}
-
-# Event Grid Module (for large file processing via HTTP trigger)
-# This module depends on both storage and function_app, avoiding circular dependency
+# Event Grid Module
+# Both billing-input and mastercard-mapping use Storage Queue triggers (no timeout)
 module "event_grid" {
   source = "./modules/event-grid"
 
@@ -171,8 +167,5 @@ module "event_grid" {
   environment         = var.environment
   project_name        = var.project_name
   storage_account_id  = module.storage.storage_account_id
-  function_app_url    = module.function_app.function_app_url
-  function_app_key    = data.azurerm_function_app_host_keys.main.default_function_key
-  containers          = ["billing-input", "mastercard-mapping"]
   tags                = local.common_tags
 }

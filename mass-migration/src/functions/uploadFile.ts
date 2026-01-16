@@ -1,10 +1,10 @@
 // Initialize Dynatrace tracing before other imports
 import '../index.js';
 
-import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import { app, InvocationContext } from '@azure/functions';
 import { createLogger, Logger } from '../utils/logger.js';
-import { getBlobStream, getBlobProperties } from '../services/blobStorage.js';
-import { executeQuery, bulkInsertValues } from '../services/database.js';
+import { getBlobStream } from '../services/blobStorage.js';
+import { executeQuery, bulkInsertValues, bulkInsertMcResponse } from '../services/database.js';
 import { queueValidateTokens, ValidateTokensMessage, queueBatchManager, BatchManagerMessage } from '../services/queueService.js';
 import { sendMigrationStartEmail } from '../services/emailService.js';
 import { parseCSVFromStream } from '../utils/fileParser.js';
@@ -13,15 +13,15 @@ import {
   mapCsvRowToMonerisToken,
   toMonerisTokenStaging,
 } from '../models/monerisToken.js';
-import { mapCsvRowToPgToken, toPgTokenStaging } from '../models/pgToken.js';
 import {
   generateFileId,
   parseFileName,
   AuditMessageCodes,
 } from '../models/migrationBatch.js';
+import { getConfig } from '../config/index.js';
 
 /**
- * Event Grid event schema for blob created events
+ * Event Grid event schema for blob created events (when delivered via Storage Queue)
  */
 interface EventGridEvent {
   id: string;
@@ -43,14 +43,6 @@ interface EventGridEvent {
   metadataVersion: string;
 }
 
-/**
- * Event Grid subscription validation event
- */
-interface SubscriptionValidationEvent {
-  validationCode: string;
-  validationUrl: string;
-}
-
 // Column list for Moneris tokens staging table
 const MONERIS_STAGING_COLUMNS = [
   'FILE_ID', 'BATCH_ID', 'MONERIS_TOKEN', 'EXP_DATE', 'ENTITY_ID', 'ENTITY_TYPE', 'ENTITY_STS',
@@ -58,92 +50,116 @@ const MONERIS_STAGING_COLUMNS = [
   'MIGRATION_STATUS', 'ERROR_CODE', 'PMR', 'UPDATED_BY', 'USAGE_TYPE'
 ];
 
-// Column list for PG tokens staging table
-const PG_STAGING_COLUMNS = [
-  'FILE_ID', 'MONERIS_TOKEN', 'PG_TOKEN', 'CARD_NUMBER_MASKED', 'FIRST_SIX', 'LAST_FOUR',
-  'FUNDING_METHOD', 'EXP_MONTH', 'EXP_YEAR', 'ERROR_CAUSE', 'ERROR_EXPLANATION', 'ERROR_FIELD',
-  'ERROR_SUPPORT_CODE', 'MIGRATION_STATUS', 'NETWORK_TOKEN_STATUS', 'CC_CARD_BRAND', 'CC_EXP_DATE',
-  'APIOPERATION', 'PAYMENT_METHOD_TYPE', 'SOURCEOFFUNDS_TYPE', 'SOURCEOFFUNDS_NUMBER',
-  'MONERIS_EXPIRY_MONTH', 'MONERIS_EXPIRY_YEAR', 'MONERIS2PG_MIGRATION_STATUS'
-];
-
 /**
- * HTTP trigger handler for Event Grid blob notifications
- * This allows streaming large files without loading them entirely into memory
+ * Queue trigger handler for Event Grid blob notifications
+ * Event Grid sends blob created events to Storage Queue, which triggers this function
+ * This allows processing large files without HTTP timeout limits
  */
-async function uploadFileHttpHandler(
-  request: HttpRequest,
+async function uploadFileQueueHandler(
+  queueItem: unknown,
   context: InvocationContext
-): Promise<HttpResponseInit> {
-  const logger: Logger = createLogger('uploadFileHttp', context);
+): Promise<void> {
+  const logger: Logger = createLogger('uploadFile', context);
 
   try {
-    // Handle Event Grid subscription validation
-    const eventGridValidation = request.headers.get('aeg-event-type');
-    if (eventGridValidation === 'SubscriptionValidation') {
-      const events = await request.json() as Array<{ data: SubscriptionValidationEvent }>;
-      const validationCode = events[0]?.data?.validationCode;
-      logger.info('Event Grid subscription validation', { validationCode });
-      return {
-        status: 200,
-        jsonBody: { validationResponse: validationCode },
-      };
+    // Parse the Event Grid event from queue message
+    // Event Grid wraps the event in a specific format when sending to queue
+    const event = parseEventGridMessage(queueItem, logger);
+
+    if (!event) {
+      logger.warn('Could not parse Event Grid message from queue', { queueItem });
+      return;
     }
 
-    // Parse Event Grid events
-    const events = await request.json() as EventGridEvent[];
-
-    if (!events || events.length === 0) {
-      logger.warn('No events in request');
-      return { status: 400, body: 'No events provided' };
+    if (event.eventType !== 'Microsoft.Storage.BlobCreated') {
+      logger.info('Skipping non-blob-created event', { eventType: event.eventType });
+      return;
     }
 
-    // Process each event
-    for (const event of events) {
-      if (event.eventType !== 'Microsoft.Storage.BlobCreated') {
-        logger.info('Skipping non-blob-created event', { eventType: event.eventType });
-        continue;
-      }
+    const blobUrl = event.data.url;
+    const contentLength = event.data.contentLength;
 
-      const blobUrl = event.data.url;
-      const contentLength = event.data.contentLength;
+    // Parse blob URL to get container and blob name
+    // URL format: https://<account>.blob.core.windows.net/<container>/<blob-path>
+    const urlParts = new URL(blobUrl);
+    const pathParts = urlParts.pathname.split('/').filter(p => p);
+    const containerName = pathParts[0];
+    const blobName = pathParts.slice(1).join('/');
+    const fileName = pathParts[pathParts.length - 1];
 
-      // Parse blob URL to get container and blob name
-      // URL format: https://<account>.blob.core.windows.net/<container>/<blob-path>
-      const urlParts = new URL(blobUrl);
-      const pathParts = urlParts.pathname.split('/').filter(p => p);
-      const containerName = pathParts[0];
-      const blobName = pathParts.slice(1).join('/');
-      const fileName = pathParts[pathParts.length - 1];
+    logger.info('Processing blob event from queue', {
+      containerName,
+      blobName,
+      fileName,
+      contentLength,
+      contentLengthMB: (contentLength / (1024 * 1024)).toFixed(2),
+    });
 
-      logger.info('Processing blob event', {
-        containerName,
-        blobName,
-        fileName,
-        contentLength,
-        contentLengthMB: (contentLength / (1024 * 1024)).toFixed(2),
-      });
+    // Determine if this is a billing input or MC response
+    const isMastercardResponse = containerName === 'mastercard-mapping' ||
+      fileName.includes('.mc.response');
 
-      // Determine if this is a billing input or MC response
-      const isMastercardResponse = containerName === 'mastercard-mapping' ||
-        fileName.includes('.mc.response');
-
-      if (isMastercardResponse) {
-        await handleMastercardResponseStream(containerName, blobName, fileName, contentLength, logger);
-      } else if (containerName === 'billing-input') {
-        await handleBillingInputStream(containerName, blobName, fileName, contentLength, logger);
-      } else {
-        logger.warn('Unknown container, skipping', { containerName });
-      }
+    if (isMastercardResponse) {
+      await handleMastercardResponseStream(containerName, blobName, fileName, contentLength, logger);
+    } else if (containerName === 'billing-input') {
+      await handleBillingInputStream(containerName, blobName, fileName, contentLength, logger);
+    } else {
+      logger.warn('Unknown container, skipping', { containerName });
     }
 
-    return { status: 200, body: 'Events processed successfully' };
+    logger.info('Queue message processed successfully');
   } catch (error) {
-    logger.error('Failed to process Event Grid notification', error);
-    return {
-      status: 500,
-      body: `Error processing event: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    };
+    logger.error('Failed to process Event Grid notification from queue', error);
+    throw error; // Rethrow to trigger queue retry mechanism
+  }
+}
+
+/**
+ * Parse Event Grid message from queue
+ * Event Grid can send messages in different formats depending on configuration
+ */
+function parseEventGridMessage(queueItem: unknown, logger: Logger): EventGridEvent | null {
+  try {
+    // If it's already an object, check if it's the event directly or wrapped
+    if (typeof queueItem === 'object' && queueItem !== null) {
+      const item = queueItem as Record<string, unknown>;
+
+      // Direct Event Grid event format
+      if (item.eventType && item.data) {
+        return item as unknown as EventGridEvent;
+      }
+
+      // Array format (Event Grid sometimes sends as array)
+      if (Array.isArray(queueItem) && queueItem.length > 0) {
+        return queueItem[0] as EventGridEvent;
+      }
+    }
+
+    // If it's a string, try to parse as JSON
+    if (typeof queueItem === 'string') {
+      // Try base64 decode first (Azure Queue sometimes base64 encodes)
+      try {
+        const decoded = Buffer.from(queueItem, 'base64').toString('utf-8');
+        const parsed = JSON.parse(decoded);
+        if (Array.isArray(parsed)) {
+          return parsed[0] as EventGridEvent;
+        }
+        return parsed as EventGridEvent;
+      } catch {
+        // Not base64, try direct JSON parse
+        const parsed = JSON.parse(queueItem);
+        if (Array.isArray(parsed)) {
+          return parsed[0] as EventGridEvent;
+        }
+        return parsed as EventGridEvent;
+      }
+    }
+
+    logger.warn('Unknown queue message format', { type: typeof queueItem });
+    return null;
+  } catch (error) {
+    logger.error('Failed to parse Event Grid message', error);
+    return null;
   }
 }
 
@@ -188,7 +204,7 @@ async function handleBillingInputStream(
 
     // Stream parse and insert in batches
     const streamResult = await parseCSVFromStream(stream, {
-      batchSize: 5000,
+      batchSize: 500,
       onBatch: async (records, batchNumber) => {
         // Validate header on first batch
         if (batchNumber === 1 && records.length > 0) {
@@ -257,7 +273,8 @@ async function handleBillingInputStream(
 }
 
 /**
- * Process Mastercard response file using streaming
+ * Process Mastercard response file using BULK INSERT
+ * Queue triggers have no timeout limit, so we can process large files directly
  */
 async function handleMastercardResponseStream(
   containerName: string,
@@ -270,13 +287,10 @@ async function handleMastercardResponseStream(
   let fileId: string = '';
   const baseFileName = fileName.replace('.mc.response', '').replace('.csv', '');
 
-  let sourceId = 'UNKNOWN';
-  let tokenType = 'P';
-
   const mcResponseMatch = baseFileName.match(/^(?:MCRSP_)?([A-Z0-9]+)\.([PTI])\.(\d{8})\.(\d{4})$/i);
   if (mcResponseMatch) {
-    sourceId = mcResponseMatch[1].toUpperCase();
-    tokenType = mcResponseMatch[2].toUpperCase();
+    const sourceId = mcResponseMatch[1].toUpperCase();
+    const tokenType = mcResponseMatch[2].toUpperCase();
     const date = mcResponseMatch[3];
     const sequence = mcResponseMatch[4];
     fileId = `${sourceId}.${tokenType}.${date}.${sequence}`;
@@ -288,7 +302,7 @@ async function handleMastercardResponseStream(
   }
 
   const fileLogger = logger.withFileId(fileId);
-  fileLogger.info('Processing MC response file via streaming', {
+  fileLogger.info('Processing MC response file via BULK INSERT', {
     fileName,
     fileId,
     contentLength,
@@ -297,58 +311,65 @@ async function handleMastercardResponseStream(
 
   // Insert audit log
   await insertAuditLog(fileId, null, 'MC_RESP_RECV',
-    `Mastercard response received (streaming): ${fileName}`, { sourceId, tokenType, contentLength });
+    `Mastercard response received: ${fileName}`, { contentLength });
 
   try {
-    // Get blob stream
-    const stream = await getBlobStream(containerName, blobName);
+    fileLogger.info('Starting BULK INSERT from blob', { containerName, blobName });
 
-    // Stream parse and insert in batches
-    const streamResult = await parseCSVFromStream(stream, {
-      batchSize: 5000,
-      onBatch: async (records, batchNumber) => {
-        fileLogger.info(`Processing MC batch ${batchNumber}`, { recordsInBatch: records.length });
-        await loadPgTokensToStagingBatch(records, fileId, fileLogger);
-      },
-      onProgress: (processed) => {
-        if (processed % 50000 === 0) {
-          fileLogger.info('MC stream processing progress', { processedRecords: processed });
-        }
-      },
+    // Use BULK INSERT to load directly from blob storage
+    // This is much faster than streaming for large files
+    const result = await bulkInsertMcResponse(
+      containerName,
+      blobName,
+      fileId
+    );
+
+    fileLogger.info('BULK INSERT completed', {
+      fileId,
+      rowsInserted: result.rowsInserted,
+      rowsUpdated: result.rowsUpdated,
+      contentLengthMB: (contentLength / (1024 * 1024)).toFixed(2),
     });
-
-    const recordCount = streamResult.totalRecords;
-
-    fileLogger.info('MC response parsed and loaded via streaming', {
-      recordCount,
-      batchesProcessed: streamResult.batchesProcessed,
-    });
-
-    // Create batch record
-    await createFileBatchRecord(fileId, fileName, sourceId, tokenType, recordCount, `${containerName}/${blobName}`, 'PROCESSING');
 
     // Insert audit log for successful load
-    await insertAuditLog(fileId, null, 'MC_RESP_LOAD',
-      `Mastercard response loaded: ${recordCount} tokens`, { recordCount });
+    await insertAuditLog(fileId, null, 'MC_RESP_LOADED',
+      `Mastercard response loaded: ${result.rowsInserted} PG tokens`, {
+        rowsInserted: result.rowsInserted,
+        rowsUpdated: result.rowsUpdated
+      });
 
-    // Queue batch manager
-    const batchManagerMessage: BatchManagerMessage = {
-      fileId,
-      sourceId,
-      totalBatches: 1,
-    };
-    await queueBatchManager(batchManagerMessage);
+    // Now that PG tokens are loaded, queue batch manager to start processing
+    // This is the correct point to start batch processing - after MC response is available
+    const batchResult = await executeQuery<{ SOURCE_ID: string; TOTAL_BATCHES: number }>(
+      `SELECT SOURCE_ID, TOTAL_BATCHES FROM TOKEN_MIGRATION_BATCH
+       WHERE FILE_ID = @fileId AND BATCH_ID = @fileId`,
+      { fileId }
+    );
 
-    fileLogger.info('PG tokens loaded, queued for batch management', {
-      fileId,
-      sourceId,
-      pgTokenCount: recordCount
-    });
+    if (batchResult.recordset.length > 0) {
+      const { SOURCE_ID: sourceId, TOTAL_BATCHES: totalBatches } = batchResult.recordset[0];
+
+      const batchManagerMessage: BatchManagerMessage = {
+        fileId,
+        sourceId,
+        totalBatches: totalBatches ?? 1,
+      };
+
+      await queueBatchManager(batchManagerMessage);
+      fileLogger.info('PG tokens loaded, queued for batch management', {
+        fileId,
+        sourceId,
+        totalBatches,
+        pgTokenCount: result.rowsInserted
+      });
+    } else {
+      fileLogger.warn('No batch record found for fileId, cannot queue batch manager', { fileId });
+    }
 
   } catch (error) {
-    fileLogger.error('MC response processing failed', error);
+    fileLogger.error('BULK INSERT failed', error);
     await insertAuditLog(fileId, null, 'MC_RESP_ERROR',
-      `MC response processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      `Failed to load Mastercard response: ${error instanceof Error ? error.message : 'Unknown error'}`,
       { error: error instanceof Error ? error.message : 'Unknown error' });
     throw error;
   }
@@ -397,59 +418,6 @@ async function loadMonerisTokensToStagingBatch(
   const rows = mapRecordsToBulkInsertFormat(records, fileId);
   const insertedCount = await bulkInsertValues('MONERIS_TOKENS_STAGING', MONERIS_STAGING_COLUMNS, rows);
   logger.info('Batch inserted to staging', { batchSize: rows.length, insertedCount });
-  return insertedCount;
-}
-
-/**
- * Convert PG token records to bulk insert format
- */
-function mapPgRecordsToBulkInsertFormat(
-  records: Record<string, string>[],
-  fileId: string
-): Record<string, unknown>[] {
-  return records.map((row) => {
-    const record = mapCsvRowToPgToken(row);
-    const staging = toPgTokenStaging(record, fileId);
-    return {
-      FILE_ID: staging.fileId,
-      MONERIS_TOKEN: staging.monerisToken,
-      PG_TOKEN: staging.pgToken,
-      CARD_NUMBER_MASKED: staging.cardNumberMasked,
-      FIRST_SIX: staging.firstSix,
-      LAST_FOUR: staging.lastFour,
-      FUNDING_METHOD: staging.fundingMethod,
-      EXP_MONTH: staging.expMonth,
-      EXP_YEAR: staging.expYear,
-      ERROR_CAUSE: staging.errorCause,
-      ERROR_EXPLANATION: staging.errorExplanation,
-      ERROR_FIELD: staging.errorField,
-      ERROR_SUPPORT_CODE: staging.errorSupportCode,
-      MIGRATION_STATUS: staging.migrationStatus,
-      NETWORK_TOKEN_STATUS: staging.networkTokenStatus,
-      CC_CARD_BRAND: staging.ccCardBrand,
-      CC_EXP_DATE: staging.ccExpDate,
-      APIOPERATION: staging.apiOperation,
-      PAYMENT_METHOD_TYPE: staging.paymentMethodType,
-      SOURCEOFFUNDS_TYPE: staging.sourceOfFundsType,
-      SOURCEOFFUNDS_NUMBER: staging.sourceOfFundsNumber,
-      MONERIS_EXPIRY_MONTH: staging.monerisExpiryMonth,
-      MONERIS_EXPIRY_YEAR: staging.monerisExpiryYear,
-      MONERIS2PG_MIGRATION_STATUS: staging.moneris2pgMigrationStatus,
-    };
-  });
-}
-
-/**
- * Load a batch of PG tokens to staging
- */
-async function loadPgTokensToStagingBatch(
-  records: Record<string, string>[],
-  fileId: string,
-  logger: Logger
-): Promise<number> {
-  const rows = mapPgRecordsToBulkInsertFormat(records, fileId);
-  const insertedCount = await bulkInsertValues('PG_TOKENS_STAGING', PG_STAGING_COLUMNS, rows);
-  logger.info('PG batch inserted to staging', { batchSize: rows.length, insertedCount });
   return insertedCount;
 }
 
@@ -529,14 +497,14 @@ async function insertAuditLog(
   );
 }
 
-// Register the HTTP trigger for Event Grid
-// Event Grid sends blob created notifications here, allowing us to stream large files
-app.http('uploadFile', {
-  methods: ['POST'],
-  authLevel: 'function',
-  route: 'upload/event-grid',
-  handler: uploadFileHttpHandler,
+// Register the Storage Queue trigger for Event Grid blob notifications
+// Event Grid sends blob created events to the queue, which triggers this function
+// Queue triggers have no timeout limit, allowing processing of large files
+app.storageQueue('uploadFile', {
+  queueName: 'file-upload-queue',
+  connection: 'AzureWebJobsStorage',
+  handler: uploadFileQueueHandler,
 });
 
 // Export for testing
-export { uploadFileHttpHandler };
+export { uploadFileQueueHandler };
