@@ -72,6 +72,14 @@ resource "azurerm_storage_container" "mastercard_mapping" {
   container_access_type = "private"
 }
 
+# Format files container - for SQL BULK INSERT format files
+# Separate from billing-input to avoid triggering Event Grid
+resource "azurerm_storage_container" "format_files" {
+  name                  = "format-files"
+  storage_account_name  = azurerm_storage_account.main.name
+  container_access_type = "private"
+}
+
 # Storage Queues
 resource "azurerm_storage_queue" "validate_tokens" {
   name                 = "validate-tokens-queue"
@@ -109,19 +117,21 @@ resource "azurerm_storage_queue" "file_upload" {
 }
 
 # Format file for BULK INSERT - Mastercard response (maps CSV columns to temp table with IDENTITY)
+# Stored in format-files container to avoid triggering Event Grid
 resource "azurerm_storage_blob" "mc_response_format_file" {
   name                   = "mc_response_temp.fmt"
   storage_account_name   = azurerm_storage_account.main.name
-  storage_container_name = azurerm_storage_container.mastercard_mapping.name
+  storage_container_name = azurerm_storage_container.format_files.name
   type                   = "Block"
   source                 = "${path.module}/../../../format-files/mc_response_temp.fmt"
 }
 
 # Format file for BULK INSERT - Moneris input (maps CSV columns to temp table with IDENTITY)
+# Stored in format-files container to avoid triggering Event Grid
 resource "azurerm_storage_blob" "moneris_input_format_file" {
   name                   = "moneris_input_temp.fmt"
   storage_account_name   = azurerm_storage_account.main.name
-  storage_container_name = azurerm_storage_container.billing_input.name
+  storage_container_name = azurerm_storage_container.format_files.name
   type                   = "Block"
   source                 = "${path.module}/../../../format-files/moneris_input_temp.fmt"
 }

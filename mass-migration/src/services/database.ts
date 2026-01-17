@@ -454,7 +454,7 @@ export async function bulkInsertMonerisTokens(
       FROM '${blobContainerName}/${blobPath}'
       WITH (
         DATA_SOURCE = 'McResponseBlobStorage',
-        FORMATFILE = 'billing-input/moneris_input_temp.fmt',
+        FORMATFILE = 'format-files/moneris_input_temp.fmt',
         FORMATFILE_DATA_SOURCE = 'McResponseBlobStorage',
         FIRSTROW = 2,
         TABLOCK,
@@ -492,6 +492,10 @@ export async function bulkInsertMonerisTokens(
       chunkRequest.input('startRow', sql.Int, startRow);
       chunkRequest.input('endRow', sql.Int, endRow);
 
+      // Field validation is performed during INSERT using CASE statements
+      // This validates: token format (E001-E003), expiry date (E005), entity type (E009),
+      // entity status (E010), usage type (E011)
+      // Duplicate detection (E007, E008) is handled separately in validateTokens
       const insertQuery = `
         INSERT INTO MONERIS_TOKENS_STAGING (
           FILE_ID, BATCH_ID, MONERIS_TOKEN, EXP_DATE, ENTITY_ID, ENTITY_TYPE, ENTITY_STS,
@@ -527,9 +531,58 @@ export async function bulkInsertMonerisTokens(
           LTRIM(RTRIM(t.TRX_SEQ_NO)),
           LTRIM(RTRIM(t.BUSINESS_UNIT)),
           LTRIM(RTRIM(t.USAGE_TYPE)),
+          -- VALIDATION_STATUS: Computed based on field validation rules
+          CASE
+            -- Token validation: E001 (not numeric), E002 (not 16 digits), E003 (wrong prefix)
+            WHEN LTRIM(RTRIM(t.MONERIS_TOKEN)) IS NULL OR LEN(LTRIM(RTRIM(t.MONERIS_TOKEN))) = 0 THEN 'INVALID'
+            WHEN TRY_CAST(LTRIM(RTRIM(t.MONERIS_TOKEN)) AS BIGINT) IS NULL THEN 'INVALID'
+            WHEN LEN(LTRIM(RTRIM(t.MONERIS_TOKEN))) != 16 THEN 'INVALID'
+            WHEN LEFT(LTRIM(RTRIM(t.MONERIS_TOKEN)), 1) != '9' THEN 'INVALID'
+            -- Expiry date validation: E005 (invalid format or month)
+            WHEN LTRIM(RTRIM(t.EXP_DATE)) IS NOT NULL
+                 AND LEN(LTRIM(RTRIM(t.EXP_DATE))) > 0
+                 AND LEN(LTRIM(RTRIM(t.EXP_DATE))) != 4 THEN 'INVALID'
+            WHEN LTRIM(RTRIM(t.EXP_DATE)) IS NOT NULL
+                 AND LEN(LTRIM(RTRIM(t.EXP_DATE))) = 4
+                 AND TRY_CAST(LEFT(LTRIM(RTRIM(t.EXP_DATE)), 2) AS INT) NOT BETWEEN 1 AND 12 THEN 'INVALID'
+            -- Entity type validation: E009 (must be 1 or 2 if provided)
+            WHEN LTRIM(RTRIM(t.ENTITY_TYPE)) IS NOT NULL
+                 AND LEN(LTRIM(RTRIM(t.ENTITY_TYPE))) > 0
+                 AND LTRIM(RTRIM(t.ENTITY_TYPE)) NOT IN ('1', '2') THEN 'INVALID'
+            -- Entity status validation: E010 (must be O, S, N, or C if provided)
+            WHEN LTRIM(RTRIM(t.ENTITY_STS)) IS NOT NULL
+                 AND LEN(LTRIM(RTRIM(t.ENTITY_STS))) > 0
+                 AND UPPER(LTRIM(RTRIM(t.ENTITY_STS))) NOT IN ('O', 'S', 'N', 'C') THEN 'INVALID'
+            -- Usage type validation: E011 (must be 1, 2, 3, or 4 if provided)
+            WHEN LTRIM(RTRIM(t.USAGE_TYPE)) IS NOT NULL
+                 AND LEN(LTRIM(RTRIM(t.USAGE_TYPE))) > 0
+                 AND LTRIM(RTRIM(t.USAGE_TYPE)) NOT IN ('1', '2', '3', '4') THEN 'INVALID'
+            ELSE 'VALID'
+          END,
           'PENDING',
-          'PENDING',
-          NULL,
+          -- ERROR_CODE: Set based on first failed validation rule
+          CASE
+            WHEN LTRIM(RTRIM(t.MONERIS_TOKEN)) IS NULL OR LEN(LTRIM(RTRIM(t.MONERIS_TOKEN))) = 0 THEN 'E001'
+            WHEN TRY_CAST(LTRIM(RTRIM(t.MONERIS_TOKEN)) AS BIGINT) IS NULL THEN 'E001'
+            WHEN LEN(LTRIM(RTRIM(t.MONERIS_TOKEN))) != 16 THEN 'E002'
+            WHEN LEFT(LTRIM(RTRIM(t.MONERIS_TOKEN)), 1) != '9' THEN 'E003'
+            WHEN LTRIM(RTRIM(t.EXP_DATE)) IS NOT NULL
+                 AND LEN(LTRIM(RTRIM(t.EXP_DATE))) > 0
+                 AND LEN(LTRIM(RTRIM(t.EXP_DATE))) != 4 THEN 'E005'
+            WHEN LTRIM(RTRIM(t.EXP_DATE)) IS NOT NULL
+                 AND LEN(LTRIM(RTRIM(t.EXP_DATE))) = 4
+                 AND TRY_CAST(LEFT(LTRIM(RTRIM(t.EXP_DATE)), 2) AS INT) NOT BETWEEN 1 AND 12 THEN 'E005'
+            WHEN LTRIM(RTRIM(t.ENTITY_TYPE)) IS NOT NULL
+                 AND LEN(LTRIM(RTRIM(t.ENTITY_TYPE))) > 0
+                 AND LTRIM(RTRIM(t.ENTITY_TYPE)) NOT IN ('1', '2') THEN 'E009'
+            WHEN LTRIM(RTRIM(t.ENTITY_STS)) IS NOT NULL
+                 AND LEN(LTRIM(RTRIM(t.ENTITY_STS))) > 0
+                 AND UPPER(LTRIM(RTRIM(t.ENTITY_STS))) NOT IN ('O', 'S', 'N', 'C') THEN 'E010'
+            WHEN LTRIM(RTRIM(t.USAGE_TYPE)) IS NOT NULL
+                 AND LEN(LTRIM(RTRIM(t.USAGE_TYPE))) > 0
+                 AND LTRIM(RTRIM(t.USAGE_TYPE)) NOT IN ('1', '2', '3', '4') THEN 'E011'
+            ELSE NULL
+          END,
           NULL,
           'SYSTEM'
         FROM ${tempTableName} t
@@ -660,7 +713,7 @@ export async function bulkInsertMcResponse(
       FROM '${blobContainerName}/${blobPath}'
       WITH (
         DATA_SOURCE = 'McResponseBlobStorage',
-        FORMATFILE = 'mastercard-mapping/mc_response_temp.fmt',
+        FORMATFILE = 'format-files/mc_response_temp.fmt',
         FORMATFILE_DATA_SOURCE = 'McResponseBlobStorage',
         FIRSTROW = 2,
         TABLOCK,

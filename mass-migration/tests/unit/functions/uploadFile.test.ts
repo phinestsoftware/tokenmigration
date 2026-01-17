@@ -1,16 +1,21 @@
 /**
  * Unit tests for uploadFile function (Queue trigger for Event Grid)
  * Tests batch record creation and file processing
+ *
+ * NOTE: With the new BULK INSERT approach:
+ * - Billing files use bulkInsertMonerisTokens (SQL BULK INSERT from blob)
+ * - getBlobHeaderLine is used for quick header validation
+ * - MC response files use bulkInsertMcResponse (unchanged)
  */
 
 import { InvocationContext } from '@azure/functions';
-import { Readable } from 'stream';
 
 // Mock the database service BEFORE importing uploadFile
 jest.mock('../../../src/services/database', () => ({
   executeQuery: jest.fn().mockResolvedValue({ recordset: [], rowsAffected: [0] }),
   bulkInsertValues: jest.fn().mockResolvedValue(0),
-  bulkInsertMcResponse: jest.fn().mockResolvedValue({ rowsInserted: 0, rowsUpdated: 0 }),
+  bulkInsertMcResponse: jest.fn().mockResolvedValue({ rowsInserted: 100, rowsUpdated: 100 }),
+  bulkInsertMonerisTokens: jest.fn().mockResolvedValue({ rowsInserted: 1 }),
 }));
 
 // Mock the queue service
@@ -26,9 +31,7 @@ jest.mock('../../../src/services/emailService', () => ({
 
 // Mock the blob storage service
 jest.mock('../../../src/services/blobStorage', () => ({
-  getBlobStream: jest.fn().mockImplementation(() => {
-    return Promise.resolve(Readable.from(Buffer.from('')));
-  }),
+  getBlobHeaderLine: jest.fn().mockResolvedValue('MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT,USAGE_TYPE'),
   getBlobProperties: jest.fn().mockResolvedValue({ contentLength: 100 }),
 }));
 
@@ -54,8 +57,8 @@ jest.mock('../../../src/utils/logger', () => ({
   })),
 }));
 
-import { executeQuery, bulkInsertMcResponse } from '../../../src/services/database';
-import { getBlobStream } from '../../../src/services/blobStorage';
+import { executeQuery, bulkInsertMcResponse, bulkInsertMonerisTokens } from '../../../src/services/database';
+import { getBlobHeaderLine } from '../../../src/services/blobStorage';
 import { uploadFileQueueHandler } from '../../../src/functions/uploadFile';
 import { AuditMessageCodes } from '../../../src/models/migrationBatch';
 
@@ -65,6 +68,14 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     dbCalls = [];
+
+    // Default mock for header validation - valid header
+    (getBlobHeaderLine as jest.Mock).mockResolvedValue(
+      'MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT,USAGE_TYPE'
+    );
+
+    // Default mock for bulk insert - success
+    (bulkInsertMonerisTokens as jest.Mock).mockResolvedValue({ rowsInserted: 1 });
 
     // Capture all database calls
     (executeQuery as jest.Mock).mockImplementation((query: string, params: Record<string, unknown>) => {
@@ -76,12 +87,7 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
   /**
    * Helper to create Event Grid queue message for blob created event
    */
-  function createBlobCreatedQueueMessage(containerName: string, blobName: string, csvContent: string): unknown {
-    // Mock getBlobStream to return the CSV content as a stream
-    (getBlobStream as jest.Mock).mockImplementation(() => {
-      return Promise.resolve(Readable.from(Buffer.from(csvContent)));
-    });
-
+  function createBlobCreatedQueueMessage(containerName: string, blobName: string, contentLength: number = 100): unknown {
     // Event Grid message format when delivered via Storage Queue
     return {
       id: 'test-event-id',
@@ -89,7 +95,7 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
       subject: `/blobServices/default/containers/${containerName}/blobs/${blobName}`,
       data: {
         url: `https://storage.blob.core.windows.net/${containerName}/${blobName}`,
-        contentLength: csvContent.length,
+        contentLength,
       },
       dataVersion: '',
       metadataVersion: '1',
@@ -130,17 +136,22 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
     );
   }
 
-  describe('Billing file processing', () => {
+  describe('Billing file processing with BULK INSERT', () => {
     it('should create audit log and batch record for valid billing file', async () => {
-      const validCsvContent = [
-        'MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT,USAGE_TYPE',
-        '9518050018246830,0139,E10001,1,O,20240115,20241201,,,',
-      ].join('\n');
-
-      const queueMessage = createBlobCreatedQueueMessage('billing-input', 'V21/V21.P.20260113.0001.input', validCsvContent);
+      const queueMessage = createBlobCreatedQueueMessage('billing-input', 'V21/V21.P.20260113.0001.input');
       const context = createMockContext();
 
       await uploadFileQueueHandler(queueMessage, context);
+
+      // Verify header validation was called
+      expect(getBlobHeaderLine).toHaveBeenCalledWith('billing-input', 'V21/V21.P.20260113.0001.input');
+
+      // Verify bulk insert was called
+      expect(bulkInsertMonerisTokens).toHaveBeenCalledWith(
+        'billing-input',
+        'V21/V21.P.20260113.0001.input',
+        expect.any(String)
+      );
 
       // Verify audit log was created
       const auditInserts = getAuditLogInserts();
@@ -152,13 +163,14 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
     });
 
     it('should reject file with invalid headers', async () => {
-      const invalidCsvContent = 'WRONG_COL1,WRONG_COL2\ndata1,data2';
+      // Mock invalid header
+      (getBlobHeaderLine as jest.Mock).mockResolvedValue('WRONG_COL1,WRONG_COL2');
 
-      const queueMessage = createBlobCreatedQueueMessage('billing-input', 'V21/V21.P.20260113.0002.input', invalidCsvContent);
+      const queueMessage = createBlobCreatedQueueMessage('billing-input', 'V21/V21.P.20260113.0002.input');
       const context = createMockContext();
 
       // Should throw for queue trigger (triggers retry)
-      await expect(uploadFileQueueHandler(queueMessage, context)).rejects.toThrow();
+      await expect(uploadFileQueueHandler(queueMessage, context)).rejects.toThrow(/Missing required columns/);
 
       // Should still create audit log with FILE_REJECTED
       const auditInserts = getAuditLogInserts();
@@ -167,16 +179,25 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
       );
       expect(fileRejectedInsert).toBeDefined();
     });
+
+    it('should use bulkInsertMonerisTokens for billing files', async () => {
+      const queueMessage = createBlobCreatedQueueMessage('billing-input', 'V21/V21.P.20260113.0003.input', 10000000);
+      const context = createMockContext();
+
+      await uploadFileQueueHandler(queueMessage, context);
+
+      // Verify bulkInsertMonerisTokens was called (not streaming)
+      expect(bulkInsertMonerisTokens).toHaveBeenCalledWith(
+        'billing-input',
+        'V21/V21.P.20260113.0003.input',
+        'V21.P.20260113.0003'
+      );
+    });
   });
 
   describe('Mastercard response file processing', () => {
     it('should call bulkInsertMcResponse for MC response file', async () => {
-      const mcResponseCsv = [
-        'apiOperation,correlationId,sourceOfFunds.type,sourceOfFunds.provided.card.number,sourceOfFunds.provided.card.expiry.month,sourceOfFunds.provided.card.expiry.year,result,error.cause,error.explanation,error.field,error.supportCode,error.validationType,token,schemeToken.status,sourceOfFunds.provided.card.fundingMethod,sourceOfFunds.provided.card.expiry,sourceOfFunds.provided.card.scheme',
-        ',9518050018246830,CARD,411111******1111,,,SUCCESS,,,,,9876543210123456,ACTIVE,CREDIT,1226,VISA',
-      ].join('\n');
-
-      const queueMessage = createBlobCreatedQueueMessage('mastercard-mapping', 'V21.P.20260114.0001.mc.response', mcResponseCsv);
+      const queueMessage = createBlobCreatedQueueMessage('mastercard-mapping', 'V21.P.20260114.0001.mc.response');
       const context = createMockContext();
 
       await uploadFileQueueHandler(queueMessage, context);
@@ -190,12 +211,7 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
     });
 
     it('should parse FILE_ID from MC response filename', async () => {
-      const mcResponseCsv = [
-        'apiOperation,correlationId,sourceOfFunds.type,sourceOfFunds.provided.card.number,sourceOfFunds.provided.card.expiry.month,sourceOfFunds.provided.card.expiry.year,result,error.cause,error.explanation,error.field,error.supportCode,error.validationType,token,schemeToken.status,sourceOfFunds.provided.card.fundingMethod,sourceOfFunds.provided.card.expiry,sourceOfFunds.provided.card.scheme',
-        ',9518050018246830,CARD,411111******1111,,,SUCCESS,,,,,9876543210123456,ACTIVE,CREDIT,1226,VISA',
-      ].join('\n');
-
-      const queueMessage = createBlobCreatedQueueMessage('mastercard-mapping', 'V21.P.20260114.0002.mc.response', mcResponseCsv);
+      const queueMessage = createBlobCreatedQueueMessage('mastercard-mapping', 'V21.P.20260114.0002.mc.response');
       const context = createMockContext();
 
       await uploadFileQueueHandler(queueMessage, context);
@@ -211,9 +227,7 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
 
   describe('Unknown container handling', () => {
     it('should ignore blobs from unknown containers', async () => {
-      const csvContent = 'col1,col2\ndata1,data2';
-
-      const queueMessage = createBlobCreatedQueueMessage('unknown-container', 'test.csv', csvContent);
+      const queueMessage = createBlobCreatedQueueMessage('unknown-container', 'test.csv');
       const context = createMockContext();
 
       // Should complete without error but not process
@@ -221,21 +235,15 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
 
       // Should not create any database records
       expect(dbCalls.length).toBe(0);
+
+      // Should not call bulk insert
+      expect(bulkInsertMonerisTokens).not.toHaveBeenCalled();
+      expect(bulkInsertMcResponse).not.toHaveBeenCalled();
     });
   });
 
   describe('Queue message parsing', () => {
     it('should handle base64 encoded queue messages', async () => {
-      const validCsvContent = [
-        'MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT,USAGE_TYPE',
-        '9518050018246830,0139,E10001,1,O,20240115,20241201,,,',
-      ].join('\n');
-
-      // Mock getBlobStream
-      (getBlobStream as jest.Mock).mockImplementation(() => {
-        return Promise.resolve(Readable.from(Buffer.from(validCsvContent)));
-      });
-
       // Event Grid message as base64 string (how Azure Queue sometimes delivers)
       const event = {
         id: 'test-event-id',
@@ -243,7 +251,7 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
         subject: '/blobServices/default/containers/billing-input/blobs/V21/test.csv',
         data: {
           url: 'https://storage.blob.core.windows.net/billing-input/V21/test.csv',
-          contentLength: validCsvContent.length,
+          contentLength: 100,
         },
       };
       const base64Message = Buffer.from(JSON.stringify(event)).toString('base64');
@@ -252,22 +260,15 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
 
       await uploadFileQueueHandler(base64Message, context);
 
-      // Verify processing happened
+      // Verify bulk insert was called
+      expect(bulkInsertMonerisTokens).toHaveBeenCalled();
+
+      // Verify batch record was created
       const batchInserts = getBatchInserts();
       expect(batchInserts.length).toBeGreaterThan(0);
     });
 
     it('should handle array-wrapped Event Grid messages', async () => {
-      const validCsvContent = [
-        'MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_DATE,TRX_SEQ_NO,BUSINESS_UNIT,USAGE_TYPE',
-        '9518050018246830,0139,E10001,1,O,20240115,20241201,,,',
-      ].join('\n');
-
-      // Mock getBlobStream
-      (getBlobStream as jest.Mock).mockImplementation(() => {
-        return Promise.resolve(Readable.from(Buffer.from(validCsvContent)));
-      });
-
       // Event Grid sometimes sends as array
       const events = [{
         id: 'test-event-id',
@@ -275,7 +276,7 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
         subject: '/blobServices/default/containers/billing-input/blobs/V21/test.csv',
         data: {
           url: 'https://storage.blob.core.windows.net/billing-input/V21/test.csv',
-          contentLength: validCsvContent.length,
+          contentLength: 100,
         },
       }];
 
@@ -283,7 +284,10 @@ describe('uploadFile (Queue trigger for Event Grid)', () => {
 
       await uploadFileQueueHandler(events, context);
 
-      // Verify processing happened
+      // Verify bulk insert was called
+      expect(bulkInsertMonerisTokens).toHaveBeenCalled();
+
+      // Verify batch record was created
       const batchInserts = getBatchInserts();
       expect(batchInserts.length).toBeGreaterThan(0);
     });

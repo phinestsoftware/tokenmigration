@@ -13,25 +13,30 @@ import {
 } from '../services/queueService.js';
 import { sendValidationFailureEmail } from '../services/emailService.js';
 import {
-  validateMonerisToken,
-  validateExpiryDate,
-  validateEntityType,
-  validateEntityStatus,
-  validateUsageType,
   isFailureThresholdExceeded,
   ValidationErrors,
 } from '../services/validationService.js';
 import { AuditMessageCodes } from '../models/migrationBatch.js';
 import { checkExistingTokensInPaymentHub } from '../services/duplicateDetectionService.js';
 
-interface TokenRecord {
+// Error code to message mapping - matches validation done in SQL during bulk insert
+const ERROR_CODE_MESSAGES: Record<string, string> = {
+  'E001': 'Token must contain only digits',
+  'E002': 'Token must be 16 digits',
+  'E003': 'Moneris token must start with 9',
+  'E005': 'Expiry date must be in MMYY format with valid month (01-12)',
+  'E007': 'Duplicate token found in file',
+  'E008': 'Duplicate token exists in Payment Hub',
+  'E009': 'Entity type must be 1 (Account) or 2 (GUID)',
+  'E010': 'Entity status must be O, S, N, or C',
+  'E011': 'Usage type must be 1, 2, 3, or 4',
+};
+
+interface InvalidTokenRecord {
   ID: number;
   MONERIS_TOKEN: string;
-  EXP_DATE: string | null;
   ENTITY_ID: string | null;
-  ENTITY_TYPE: string | null;
-  ENTITY_STS: string | null;
-  USAGE_TYPE: string | null;
+  ERROR_CODE: string | null;
 }
 
 /**
@@ -81,7 +86,14 @@ async function validateTokensHandler(
 }
 
 /**
- * Validate Moneris tokens using BULK operations
+ * Validate Moneris tokens - hybrid approach
+ *
+ * Field validation (E001-E003, E005, E009-E011) is done in SQL during bulk insert
+ * This function handles:
+ * 1. Inserting error messages for field validation failures (SQL set ERROR_CODE, we add ERROR_MESSAGE)
+ * 2. Duplicate detection within file (E007)
+ * 3. Duplicate detection in Payment Hub (E008)
+ * 4. Count updates and failure threshold checks
  */
 async function validateMonerisTokens(
   fileId: string,
@@ -89,133 +101,55 @@ async function validateMonerisTokens(
   failureThreshold: number,
   logger: Logger
 ): Promise<void> {
-  // Get all tokens for this file
-  const result = await executeQuery<TokenRecord>(
-    `SELECT ID, MONERIS_TOKEN, EXP_DATE, ENTITY_ID, ENTITY_TYPE, ENTITY_STS, USAGE_TYPE
+  // Step 1: Get counts and invalid records
+  // Field validation was done in SQL during INSERT, so records have VALIDATION_STATUS set
+  const countResult = await executeQuery<{ status: string; cnt: number }>(
+    `SELECT VALIDATION_STATUS as status, COUNT(*) as cnt
      FROM MONERIS_TOKENS_STAGING
-     WHERE FILE_ID = @fileId AND VALIDATION_STATUS = 'PENDING'`,
+     WHERE FILE_ID = @fileId
+     GROUP BY VALIDATION_STATUS`,
     { fileId }
   );
 
-  const tokens = result.recordset;
-  const totalCount = tokens.length;
-
-  logger.info('Validating Moneris tokens', { totalCount });
-
   let validCount = 0;
   let invalidCount = 0;
-  let duplicateCount = 0;
-
-  // Track seen tokens for duplicate detection within file
-  const seenTokens = new Set<string>();
-
-  // Collect updates for bulk operations
-  const tokenUpdates: { ID: number; VALIDATION_STATUS: string; ERROR_CODE: string | null }[] = [];
-  const errorDetails: {
-    FILE_ID: string;
-    BATCH_ID: string | null;
-    MONERIS_TOKEN: string;
-    ENTITY_ID: string | null;
-    ERROR_CODE: string | null;
-    ERROR_MESSAGE: string;
-    ERROR_TYPE: string;
-  }[] = [];
-
-  for (const token of tokens) {
-    let status = 'VALID';
-    let errorCode: string | null = null;
-    let errorMessage: string = '';
-
-    // Check for duplicate within file
-    if (seenTokens.has(token.MONERIS_TOKEN)) {
-      status = 'DUPLICATE';
-      errorCode = ValidationErrors.DUPLICATE_TOKEN;
-      errorMessage = 'Duplicate token found in file';
-      duplicateCount++;
-    } else {
-      seenTokens.add(token.MONERIS_TOKEN);
-
-      // Validate token format
-      const tokenValidation = validateMonerisToken(token.MONERIS_TOKEN);
-      if (!tokenValidation.isValid) {
-        status = 'INVALID';
-        errorCode = tokenValidation.errorCode ?? null;
-        errorMessage = tokenValidation.errorMessage ?? 'Invalid token format';
-        invalidCount++;
-      } else {
-        // Validate expiry date
-        const expiryValidation = validateExpiryDate(token.EXP_DATE);
-        if (!expiryValidation.isValid) {
-          status = 'INVALID';
-          errorCode = expiryValidation.errorCode ?? null;
-          errorMessage = expiryValidation.errorMessage ?? 'Invalid expiry date';
-          invalidCount++;
-        } else {
-          // Validate entity type
-          const entityTypeValidation = validateEntityType(token.ENTITY_TYPE);
-          if (!entityTypeValidation.isValid) {
-            status = 'INVALID';
-            errorCode = entityTypeValidation.errorCode ?? null;
-            errorMessage = entityTypeValidation.errorMessage ?? 'Invalid entity type';
-            invalidCount++;
-          } else {
-            // Validate entity status
-            const entityStatusValidation = validateEntityStatus(token.ENTITY_STS);
-            if (!entityStatusValidation.isValid) {
-              status = 'INVALID';
-              errorCode = entityStatusValidation.errorCode ?? null;
-              errorMessage = entityStatusValidation.errorMessage ?? 'Invalid entity status';
-              invalidCount++;
-            } else {
-              // Validate usage type
-              const usageTypeValidation = validateUsageType(token.USAGE_TYPE);
-              if (!usageTypeValidation.isValid) {
-                status = 'INVALID';
-                errorCode = usageTypeValidation.errorCode ?? null;
-                errorMessage = usageTypeValidation.errorMessage ?? 'Invalid usage type';
-                invalidCount++;
-              } else {
-                validCount++;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Collect update for bulk operation
-    tokenUpdates.push({
-      ID: token.ID,
-      VALIDATION_STATUS: status,
-      ERROR_CODE: errorCode,
-    });
-
-    // Collect error details if invalid
-    if (status !== 'VALID') {
-      errorDetails.push({
-        FILE_ID: fileId,
-        BATCH_ID: null,
-        MONERIS_TOKEN: token.MONERIS_TOKEN,
-        ENTITY_ID: token.ENTITY_ID,
-        ERROR_CODE: errorCode,
-        ERROR_MESSAGE: errorMessage,
-        ERROR_TYPE: 'VALIDATION',
-      });
-    }
+  for (const row of countResult.recordset) {
+    if (row.status === 'VALID') validCount = row.cnt;
+    else if (row.status === 'INVALID') invalidCount = row.cnt;
   }
+  const totalCount = validCount + invalidCount;
 
-  // Execute bulk update for token statuses
-  logger.info('Bulk updating validation statuses', { count: tokenUpdates.length });
-  await bulkUpdate(
-    'MONERIS_TOKENS_STAGING',
-    'ID',
-    tokenUpdates,
-    ['VALIDATION_STATUS', 'ERROR_CODE']
+  logger.info('Field validation counts from SQL', { validCount, invalidCount, totalCount });
+
+  // Step 2: Insert error messages for INVALID records (SQL set ERROR_CODE, we add ERROR_MESSAGE)
+  const invalidResult = await executeQuery<InvalidTokenRecord>(
+    `SELECT ID, MONERIS_TOKEN, ENTITY_ID, ERROR_CODE
+     FROM MONERIS_TOKENS_STAGING
+     WHERE FILE_ID = @fileId AND VALIDATION_STATUS = 'INVALID'`,
+    { fileId }
   );
 
-  // Bulk insert error details
-  if (errorDetails.length > 0) {
-    logger.info('Bulk inserting validation errors', { count: errorDetails.length });
+  if (invalidResult.recordset.length > 0) {
+    logger.info('Inserting error details for invalid records', { count: invalidResult.recordset.length });
+
+    const errorDetails: {
+      FILE_ID: string;
+      BATCH_ID: string | null;
+      MONERIS_TOKEN: string;
+      ENTITY_ID: string | null;
+      ERROR_CODE: string | null;
+      ERROR_MESSAGE: string;
+      ERROR_TYPE: string;
+    }[] = invalidResult.recordset.map(token => ({
+      FILE_ID: fileId,
+      BATCH_ID: null,
+      MONERIS_TOKEN: token.MONERIS_TOKEN,
+      ENTITY_ID: token.ENTITY_ID,
+      ERROR_CODE: token.ERROR_CODE,
+      ERROR_MESSAGE: ERROR_CODE_MESSAGES[token.ERROR_CODE ?? ''] ?? 'Validation failed',
+      ERROR_TYPE: 'VALIDATION',
+    }));
+
     await bulkInsertValues(
       'MIGRATION_ERROR_DETAILS',
       ['FILE_ID', 'BATCH_ID', 'MONERIS_TOKEN', 'ENTITY_ID', 'ERROR_CODE', 'ERROR_MESSAGE', 'ERROR_TYPE'],
@@ -223,11 +157,69 @@ async function validateMonerisTokens(
     );
   }
 
-  // Check for duplicates in Payment Hub (existing tokens)
-  // Issue #42 FIX: Now checks PMR_MONERIS_MAPPING table instead of MONERIS_TOKENS_STAGING
+  // Step 3: Detect duplicates within file using SQL window function
+  // Find tokens that appear more than once among VALID records
+  // Keep the first occurrence (min ID) as VALID, mark others as DUPLICATE
+  logger.info('Detecting duplicates within file');
+
+  const duplicateUpdateResult = await executeQuery<{ rowsAffected: number }>(
+    `WITH DuplicateTokens AS (
+       SELECT ID, MONERIS_TOKEN, ENTITY_ID,
+              ROW_NUMBER() OVER (PARTITION BY MONERIS_TOKEN ORDER BY ID) as rn
+       FROM MONERIS_TOKENS_STAGING
+       WHERE FILE_ID = @fileId AND VALIDATION_STATUS = 'VALID'
+     )
+     UPDATE MONERIS_TOKENS_STAGING
+     SET VALIDATION_STATUS = 'DUPLICATE',
+         ERROR_CODE = 'E007',
+         UPDATED_AT = GETUTCDATE()
+     FROM MONERIS_TOKENS_STAGING m
+     INNER JOIN DuplicateTokens d ON m.ID = d.ID
+     WHERE d.rn > 1;
+
+     SELECT @@ROWCOUNT as rowsAffected;`,
+    { fileId }
+  );
+
+  const duplicatesInFile = duplicateUpdateResult.recordset[0]?.rowsAffected ?? 0;
+  logger.info('Duplicates within file marked', { count: duplicatesInFile });
+
+  // Insert error details for duplicates within file
+  if (duplicatesInFile > 0) {
+    const duplicateRecords = await executeQuery<{ MONERIS_TOKEN: string; ENTITY_ID: string | null }>(
+      `SELECT MONERIS_TOKEN, ENTITY_ID
+       FROM MONERIS_TOKENS_STAGING
+       WHERE FILE_ID = @fileId AND VALIDATION_STATUS = 'DUPLICATE' AND ERROR_CODE = 'E007'`,
+      { fileId }
+    );
+
+    const duplicateErrors = duplicateRecords.recordset.map(token => ({
+      FILE_ID: fileId,
+      BATCH_ID: null,
+      MONERIS_TOKEN: token.MONERIS_TOKEN,
+      ENTITY_ID: token.ENTITY_ID,
+      ERROR_CODE: ValidationErrors.DUPLICATE_TOKEN,
+      ERROR_MESSAGE: ERROR_CODE_MESSAGES['E007'],
+      ERROR_TYPE: 'VALIDATION',
+    }));
+
+    await bulkInsertValues(
+      'MIGRATION_ERROR_DETAILS',
+      ['FILE_ID', 'BATCH_ID', 'MONERIS_TOKEN', 'ENTITY_ID', 'ERROR_CODE', 'ERROR_MESSAGE', 'ERROR_TYPE'],
+      duplicateErrors
+    );
+  }
+
+  // Update validCount after marking in-file duplicates
+  validCount -= duplicatesInFile;
+
+  // Step 4: Check for duplicates in Payment Hub (existing tokens)
+  // This checks PMR_MONERIS_MAPPING table for tokens already migrated
   const existingDuplicates = await checkExistingTokensInPaymentHub(fileId, logger);
-  duplicateCount += existingDuplicates;
-  validCount -= existingDuplicates; // Decrement validCount since these were initially counted as valid
+
+  // Total duplicates = in-file duplicates + Payment Hub duplicates
+  const duplicateCount = duplicatesInFile + existingDuplicates;
+  validCount -= existingDuplicates;
 
   const totalFailures = invalidCount + duplicateCount;
 
@@ -244,9 +236,9 @@ async function validateMonerisTokens(
   // Insert audit log
   await insertAuditLog(fileId, null, AuditMessageCodes.TOKEN_VALIDATED,
     `Validation completed: ${validCount} valid, ${invalidCount} invalid, ${duplicateCount} duplicates`,
-    { validCount, invalidCount, duplicateCount, totalCount });
+    { validCount, invalidCount, duplicateCount, totalCount, duplicatesInFile, existingDuplicates });
 
-  logger.info('Validation stats', { validCount, invalidCount, duplicateCount, totalCount });
+  logger.info('Validation stats', { validCount, invalidCount, duplicateCount, totalCount, duplicatesInFile, existingDuplicates });
 
   // Check failure threshold
   if (isFailureThresholdExceeded(totalCount, totalFailures, failureThreshold)) {
