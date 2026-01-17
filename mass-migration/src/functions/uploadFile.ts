@@ -3,16 +3,11 @@ import '../index.js';
 
 import { app, InvocationContext } from '@azure/functions';
 import { createLogger, Logger } from '../utils/logger.js';
-import { getBlobStream } from '../services/blobStorage.js';
-import { executeQuery, bulkInsertValues, bulkInsertMcResponse } from '../services/database.js';
+import { getBlobHeaderLine } from '../services/blobStorage.js';
+import { executeQuery, bulkInsertMonerisTokens, bulkInsertMcResponse } from '../services/database.js';
 import { queueValidateTokens, ValidateTokensMessage, queueBatchManager, BatchManagerMessage } from '../services/queueService.js';
 import { sendMigrationStartEmail } from '../services/emailService.js';
-import { parseCSVFromStream } from '../utils/fileParser.js';
-import {
-  MonerisTokenCsvColumns,
-  mapCsvRowToMonerisToken,
-  toMonerisTokenStaging,
-} from '../models/monerisToken.js';
+import { MonerisTokenCsvColumns } from '../models/monerisToken.js';
 import {
   generateFileId,
   parseFileName,
@@ -42,13 +37,6 @@ interface EventGridEvent {
   dataVersion: string;
   metadataVersion: string;
 }
-
-// Column list for Moneris tokens staging table
-const MONERIS_STAGING_COLUMNS = [
-  'FILE_ID', 'BATCH_ID', 'MONERIS_TOKEN', 'EXP_DATE', 'ENTITY_ID', 'ENTITY_TYPE', 'ENTITY_STS',
-  'CREATION_DATE', 'LAST_USE_DATE', 'TRX_SEQ_NO', 'BUSINESS_UNIT', 'VALIDATION_STATUS',
-  'MIGRATION_STATUS', 'ERROR_CODE', 'PMR', 'UPDATED_BY', 'USAGE_TYPE'
-];
 
 /**
  * Queue trigger handler for Event Grid blob notifications
@@ -164,7 +152,8 @@ function parseEventGridMessage(queueItem: unknown, logger: Logger): EventGridEve
 }
 
 /**
- * Process billing input file using streaming
+ * Process billing input file using BULK INSERT
+ * Much faster than streaming - uses SQL Server's native BULK INSERT mechanism
  */
 async function handleBillingInputStream(
   containerName: string,
@@ -176,7 +165,7 @@ async function handleBillingInputStream(
   const fileId = generateFileId(fileName);
   const fileLogger = logger.withFileId(fileId);
 
-  fileLogger.info('Processing billing file via streaming', {
+  fileLogger.info('Processing billing file via BULK INSERT', {
     fileName,
     contentLength,
     contentLengthMB: (contentLength / (1024 * 1024)).toFixed(2),
@@ -191,46 +180,42 @@ async function handleBillingInputStream(
   await createFileBatchRecord(fileId, fileName, sourceId, tokenType, 0, `${containerName}/${blobName}`, 'VALIDATING');
 
   try {
-    // Get blob stream - does NOT load entire file into memory
-    const stream = await getBlobStream(containerName, blobName);
+    // Step 1: Quick header validation - only reads first 4KB
+    fileLogger.info('Validating CSV header before BULK INSERT');
+    const headerLine = await getBlobHeaderLine(containerName, blobName);
+    const headerColumns = headerLine.split(',').map(col => col.trim().toUpperCase());
 
-    // Validate header by peeking at first line
-    // For now, we'll validate during parsing and reject if invalid
-    fileLogger.info('Starting streaming CSV parse');
+    // Check for required columns (excluding optional USAGE_TYPE)
+    const requiredColumns = MonerisTokenCsvColumns.filter(col => col !== 'USAGE_TYPE');
+    const missingColumns = requiredColumns.filter(col => !headerColumns.includes(col));
+
+    if (missingColumns.length > 0) {
+      throw new Error(`Missing required columns: ${missingColumns.join(', ')}. Found: ${headerColumns.join(', ')}`);
+    }
+
+    fileLogger.info('Header validation passed', {
+      foundColumns: headerColumns.length,
+      requiredColumns: requiredColumns.length
+    });
 
     // Insert audit log
     await insertAuditLog(fileId, null, AuditMessageCodes.FILE_RECEIVED,
-      `File received (streaming): ${fileName}`, { sourceId, tokenType, contentLength });
+      `File received (BULK INSERT): ${fileName}`, { sourceId, tokenType, contentLength });
 
-    // Stream parse and insert in batches
-    const streamResult = await parseCSVFromStream(stream, {
-      batchSize: 500,
-      onBatch: async (records, batchNumber) => {
-        // Validate header on first batch
-        if (batchNumber === 1 && records.length > 0) {
-          const firstRecord = records[0];
-          const columns = Object.keys(firstRecord);
-          const missingColumns = MonerisTokenCsvColumns.filter(col => !columns.includes(col));
-          if (missingColumns.length > 0) {
-            throw new Error(`Missing required columns: ${missingColumns.join(', ')}`);
-          }
-        }
+    // Step 2: BULK INSERT from blob storage
+    fileLogger.info('Starting BULK INSERT from blob storage');
+    const bulkStartTime = Date.now();
 
-        fileLogger.info(`Processing batch ${batchNumber}`, { recordsInBatch: records.length });
-        await loadMonerisTokensToStagingBatch(records, fileId, fileLogger);
-      },
-      onProgress: (processed) => {
-        if (processed % 50000 === 0) {
-          fileLogger.info('Stream processing progress', { processedRecords: processed });
-        }
-      },
-    });
+    const result = await bulkInsertMonerisTokens(containerName, blobName, fileId);
 
-    const recordCount = streamResult.totalRecords;
+    const bulkDuration = ((Date.now() - bulkStartTime) / 1000).toFixed(1);
+    const recordCount = result.rowsInserted;
 
-    fileLogger.info('File parsed and loaded via streaming', {
+    fileLogger.info('BULK INSERT completed', {
       recordCount,
-      batchesProcessed: streamResult.batchesProcessed,
+      durationSeconds: bulkDuration,
+      recordsPerSecond: (recordCount / parseFloat(bulkDuration)).toFixed(0),
+      contentLengthMB: (contentLength / (1024 * 1024)).toFixed(2),
     });
 
     // Update batch record
@@ -239,7 +224,8 @@ async function handleBillingInputStream(
 
     // Insert audit log for successful load
     await insertAuditLog(fileId, null, AuditMessageCodes.FILE_LOADED,
-      `File loaded to staging: ${recordCount} records`, { recordCount });
+      `File loaded to staging via BULK INSERT: ${recordCount} records in ${bulkDuration}s`,
+      { recordCount, durationSeconds: bulkDuration });
 
     // Send start email notification
     await sendMigrationStartEmail({
@@ -373,52 +359,6 @@ async function handleMastercardResponseStream(
       { error: error instanceof Error ? error.message : 'Unknown error' });
     throw error;
   }
-}
-
-/**
- * Convert Moneris records to bulk insert format
- */
-function mapRecordsToBulkInsertFormat(
-  records: Record<string, string>[],
-  fileId: string
-): Record<string, unknown>[] {
-  return records.map((row) => {
-    const record = mapCsvRowToMonerisToken(row);
-    const t = toMonerisTokenStaging(record, fileId);
-    return {
-      FILE_ID: t.fileId,
-      BATCH_ID: t.batchId,
-      MONERIS_TOKEN: t.monerisToken,
-      EXP_DATE: t.expDate,
-      ENTITY_ID: t.entityId,
-      ENTITY_TYPE: t.entityType,
-      ENTITY_STS: t.entitySts,
-      CREATION_DATE: t.creationDate,
-      LAST_USE_DATE: t.lastUseDate,
-      TRX_SEQ_NO: t.trxSeqNo,
-      BUSINESS_UNIT: t.businessUnit,
-      VALIDATION_STATUS: t.validationStatus,
-      MIGRATION_STATUS: t.migrationStatus,
-      ERROR_CODE: t.errorCode,
-      PMR: t.pmr,
-      UPDATED_BY: t.updatedBy,
-      USAGE_TYPE: t.usageType,
-    };
-  });
-}
-
-/**
- * Load a batch of Moneris tokens to staging
- */
-async function loadMonerisTokensToStagingBatch(
-  records: Record<string, string>[],
-  fileId: string,
-  logger: Logger
-): Promise<number> {
-  const rows = mapRecordsToBulkInsertFormat(records, fileId);
-  const insertedCount = await bulkInsertValues('MONERIS_TOKENS_STAGING', MONERIS_STAGING_COLUMNS, rows);
-  logger.info('Batch inserted to staging', { batchSize: rows.length, insertedCount });
-  return insertedCount;
 }
 
 /**

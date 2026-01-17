@@ -241,3 +241,34 @@ export async function getBlobStream(
 
   return response.readableStreamBody;
 }
+
+/**
+ * Read just the first line (header) of a blob - for quick validation before BULK INSERT
+ * Only downloads the first few KB to get the header, not the entire file
+ */
+export async function getBlobHeaderLine(
+  containerName: string,
+  blobName: string
+): Promise<string> {
+  const containerClient = getContainerClient(containerName);
+  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+  // Download only first 4KB - should be enough for any header line
+  const response = await blockBlobClient.download(0, 4096);
+
+  if (!response.readableStreamBody) {
+    throw new Error(`Failed to get header for blob: ${blobName}`);
+  }
+
+  const chunks: Buffer[] = [];
+  for await (const chunk of response.readableStreamBody) {
+    chunks.push(Buffer.from(chunk));
+  }
+
+  const content = Buffer.concat(chunks).toString('utf-8');
+  const firstLine = content.split('\n')[0]?.trim() || '';
+
+  logger.info('Blob header read', { containerName, blobName, headerLength: firstLine.length });
+
+  return firstLine;
+}

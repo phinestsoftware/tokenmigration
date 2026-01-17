@@ -108,13 +108,22 @@ resource "azurerm_storage_queue" "file_upload" {
   storage_account_name = azurerm_storage_account.main.name
 }
 
-# Format file for BULK INSERT (maps CSV columns to temp table with IDENTITY)
+# Format file for BULK INSERT - Mastercard response (maps CSV columns to temp table with IDENTITY)
 resource "azurerm_storage_blob" "mc_response_format_file" {
   name                   = "mc_response_temp.fmt"
   storage_account_name   = azurerm_storage_account.main.name
   storage_container_name = azurerm_storage_container.mastercard_mapping.name
   type                   = "Block"
   source                 = "${path.module}/../../../format-files/mc_response_temp.fmt"
+}
+
+# Format file for BULK INSERT - Moneris input (maps CSV columns to temp table with IDENTITY)
+resource "azurerm_storage_blob" "moneris_input_format_file" {
+  name                   = "moneris_input_temp.fmt"
+  storage_account_name   = azurerm_storage_account.main.name
+  storage_container_name = azurerm_storage_container.billing_input.name
+  type                   = "Block"
+  source                 = "${path.module}/../../../format-files/moneris_input_temp.fmt"
 }
 
 

@@ -1,0 +1,12 @@
+14.0
+10
+1       SQLCHAR             0       32      ","      2     MONERIS_TOKEN                        ""
+2       SQLCHAR             0       10      ","      3     EXP_DATE                             ""
+3       SQLCHAR             0       50      ","      4     ENTITY_ID                            ""
+4       SQLCHAR             0       4       ","      5     ENTITY_TYPE                          ""
+5       SQLCHAR             0       4       ","      6     ENTITY_STS                           ""
+6       SQLCHAR             0       8       ","      7     CREATION_DATE                        ""
+7       SQLCHAR             0       8       ","      8     LAST_USE_DATE                        ""
+8       SQLCHAR             0       36      ","      9     TRX_SEQ_NO                           ""
+9       SQLCHAR             0       20      ","      10    BUSINESS_UNIT                        ""
+10      SQLCHAR             0       50      "\n"     11    USAGE_TYPE                           ""

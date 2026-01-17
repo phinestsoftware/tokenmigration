@@ -373,6 +373,204 @@ export async function trueBulkInsert<T extends Record<string, unknown>>(
 }
 
 /**
+ * Bulk insert Moneris input CSV from blob storage using SQL Server BULK INSERT
+ * This is MUCH faster than streaming row-by-row inserts - can handle millions of records in minutes
+ *
+ * Flow:
+ * 1. BULK INSERT CSV into temp table with IDENTITY column (for chunking)
+ * 2. INSERT...SELECT into MONERIS_TOKENS_STAGING in chunks (200K rows each) to avoid LOG_RATE_GOVERNOR
+ * 3. Derived columns (FILE_ID, VALIDATION_STATUS, MIGRATION_STATUS) added during INSERT
+ *
+ * @param blobContainerName - Container name (e.g., 'billing-input')
+ * @param blobPath - Path within container (e.g., 'V21/file.csv')
+ * @param fileId - File ID to tag all records
+ * @returns Object with rowsInserted count
+ */
+export async function bulkInsertMonerisTokens(
+  blobContainerName: string,
+  blobPath: string,
+  fileId: string
+): Promise<{ rowsInserted: number }> {
+  // Use global temp table for BULK INSERT (minimal logging in tempdb = fast)
+  // Then INSERT to permanent table in sequential chunks (same connection)
+  const tempTableName = `##MONERIS_INPUT_${fileId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+  // Create dedicated connection pool with extended timeout for large file BULK INSERT
+  // Single connection because global temp tables are session-scoped
+  const config: sql.config = {
+    ...getSqlConfig(),
+    requestTimeout: 600000, // 10 minutes per batch (chunked inserts are faster)
+    connectionTimeout: 60000, // 1 minute to connect
+    pool: {
+      max: 1, // Single connection - temp table is session-scoped
+      min: 1,
+      idleTimeoutMillis: 600000,
+    },
+    options: {
+      ...getSqlConfig().options,
+      enableArithAbort: true,
+    },
+  };
+
+  // Use new ConnectionPool to ensure we get a fresh connection with our timeout settings
+  const dedicatedPool = new sql.ConnectionPool(config);
+  await dedicatedPool.connect();
+  logger.info('Created dedicated connection for Moneris BULK INSERT', {
+    requestTimeout: config.requestTimeout,
+  });
+
+  try {
+    logger.info(`Starting Moneris BULK INSERT for ${blobContainerName}/${blobPath}`);
+
+    // Step 1: Create global temp table with IDENTITY column for chunking
+    // Global temp tables use minimal logging in tempdb = much faster BULK INSERT
+    // Non-XML format file maps CSV columns to table columns 2-11, skipping row_id (column 1)
+    const createTempTable = `
+      IF OBJECT_ID('tempdb..${tempTableName}') IS NOT NULL DROP TABLE ${tempTableName};
+
+      CREATE TABLE ${tempTableName} (
+        [row_id] INT IDENTITY(1,1) NOT NULL,
+        [MONERIS_TOKEN] VARCHAR(32) NULL,
+        [EXP_DATE] VARCHAR(10) NULL,
+        [ENTITY_ID] VARCHAR(50) NULL,
+        [ENTITY_TYPE] VARCHAR(4) NULL,
+        [ENTITY_STS] VARCHAR(4) NULL,
+        [CREATION_DATE] VARCHAR(8) NULL,
+        [LAST_USE_DATE] VARCHAR(8) NULL,
+        [TRX_SEQ_NO] VARCHAR(36) NULL,
+        [BUSINESS_UNIT] VARCHAR(20) NULL,
+        [USAGE_TYPE] VARCHAR(50) NULL
+      );
+    `;
+
+    await dedicatedPool.request().query(createTempTable);
+    logger.info('Global temp table created with IDENTITY column', { tempTableName });
+
+    // Step 2: BULK INSERT from blob storage using non-XML format file
+    // Format file maps 10 CSV columns to table columns 2-11, skipping row_id (column 1)
+    // Non-XML format files work better with Azure SQL external data sources
+    const bulkInsertQuery = `
+      BULK INSERT ${tempTableName}
+      FROM '${blobContainerName}/${blobPath}'
+      WITH (
+        DATA_SOURCE = 'McResponseBlobStorage',
+        FORMATFILE = 'billing-input/moneris_input_temp.fmt',
+        FORMATFILE_DATA_SOURCE = 'McResponseBlobStorage',
+        FIRSTROW = 2,
+        TABLOCK,
+        MAXERRORS = 0
+      );
+    `;
+
+    logger.info('Starting BULK INSERT with format file...');
+    const bulkStartTime = Date.now();
+    await dedicatedPool.request().query(bulkInsertQuery);
+    const bulkDuration = ((Date.now() - bulkStartTime) / 1000).toFixed(1);
+    logger.info(`BULK INSERT completed in ${bulkDuration}s`);
+
+    // Step 3: Get row count from temp table
+    const countResult = await dedicatedPool.request().query<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM ${tempTableName}`);
+    const tempRowCount = countResult.recordset[0]?.cnt || 0;
+    logger.info(`Global temp table has ${tempRowCount} rows`);
+
+    // Step 4: INSERT...SELECT into MONERIS_TOKENS_STAGING in chunks
+    // 200K chunks - balance between speed and avoiding log rate throttling
+    const CHUNK_SIZE = 200000;
+    const numChunks = Math.ceil(tempRowCount / CHUNK_SIZE);
+
+    logger.info(`Starting chunked INSERT: ${tempRowCount} rows in ${numChunks} chunks of ${CHUNK_SIZE}`);
+    const insertStartTime = Date.now();
+
+    // Process chunks sequentially (single connection for temp table access)
+    let totalRowsInserted = 0;
+    for (let chunkNum = 0; chunkNum < numChunks; chunkNum++) {
+      const startRow = chunkNum * CHUNK_SIZE + 1;
+      const endRow = Math.min((chunkNum + 1) * CHUNK_SIZE, tempRowCount);
+
+      const chunkRequest = dedicatedPool.request();
+      chunkRequest.input('fileId', fileId);
+      chunkRequest.input('startRow', sql.Int, startRow);
+      chunkRequest.input('endRow', sql.Int, endRow);
+
+      const insertQuery = `
+        INSERT INTO MONERIS_TOKENS_STAGING (
+          FILE_ID, BATCH_ID, MONERIS_TOKEN, EXP_DATE, ENTITY_ID, ENTITY_TYPE, ENTITY_STS,
+          CREATION_DATE, LAST_USE_DATE, TRX_SEQ_NO, BUSINESS_UNIT, USAGE_TYPE,
+          VALIDATION_STATUS, MIGRATION_STATUS, ERROR_CODE, PMR, UPDATED_BY
+        )
+        SELECT
+          @fileId,
+          NULL,
+          LTRIM(RTRIM(t.MONERIS_TOKEN)),
+          LTRIM(RTRIM(t.EXP_DATE)),
+          LTRIM(RTRIM(t.ENTITY_ID)),
+          LTRIM(RTRIM(t.ENTITY_TYPE)),
+          LTRIM(RTRIM(t.ENTITY_STS)),
+          CASE
+            WHEN t.CREATION_DATE IS NOT NULL AND LEN(LTRIM(RTRIM(t.CREATION_DATE))) = 8
+            THEN TRY_CAST(
+              SUBSTRING(LTRIM(RTRIM(t.CREATION_DATE)), 1, 4) + '-' +
+              SUBSTRING(LTRIM(RTRIM(t.CREATION_DATE)), 5, 2) + '-' +
+              SUBSTRING(LTRIM(RTRIM(t.CREATION_DATE)), 7, 2) AS DATE
+            )
+            ELSE NULL
+          END,
+          CASE
+            WHEN t.LAST_USE_DATE IS NOT NULL AND LEN(LTRIM(RTRIM(t.LAST_USE_DATE))) = 8
+            THEN TRY_CAST(
+              SUBSTRING(LTRIM(RTRIM(t.LAST_USE_DATE)), 1, 4) + '-' +
+              SUBSTRING(LTRIM(RTRIM(t.LAST_USE_DATE)), 5, 2) + '-' +
+              SUBSTRING(LTRIM(RTRIM(t.LAST_USE_DATE)), 7, 2) AS DATE
+            )
+            ELSE NULL
+          END,
+          LTRIM(RTRIM(t.TRX_SEQ_NO)),
+          LTRIM(RTRIM(t.BUSINESS_UNIT)),
+          LTRIM(RTRIM(t.USAGE_TYPE)),
+          'PENDING',
+          'PENDING',
+          NULL,
+          NULL,
+          'SYSTEM'
+        FROM ${tempTableName} t
+        WHERE t.row_id BETWEEN @startRow AND @endRow
+          AND t.MONERIS_TOKEN IS NOT NULL
+          AND LEN(LTRIM(RTRIM(t.MONERIS_TOKEN))) > 0;
+      `;
+
+      const chunkStartTime = Date.now();
+      const insertResult = await chunkRequest.query(insertQuery);
+      const chunkRowsInserted = insertResult.rowsAffected[0] || 0;
+      totalRowsInserted += chunkRowsInserted;
+      const chunkDuration = ((Date.now() - chunkStartTime) / 1000).toFixed(1);
+
+      logger.info(`Chunk ${chunkNum + 1}/${numChunks} completed: ${chunkRowsInserted} rows in ${chunkDuration}s (rows ${startRow}-${endRow})`);
+    }
+
+    const insertDuration = ((Date.now() - insertStartTime) / 1000).toFixed(1);
+    logger.info(`All chunks completed: ${totalRowsInserted} rows inserted in ${insertDuration}s`);
+
+    // Cleanup temp table
+    await dedicatedPool.request().query(`DROP TABLE IF EXISTS ${tempTableName}`);
+    logger.info('Temp table cleaned up');
+
+    return { rowsInserted: totalRowsInserted };
+  } catch (error) {
+    // Attempt to clean up temp table on error
+    try {
+      await dedicatedPool.request().query(`DROP TABLE IF EXISTS ${tempTableName}`);
+    } catch (cleanupError) {
+      logger.warn('Failed to clean up temp table on error', { error: String(cleanupError) });
+    }
+    throw error;
+  } finally {
+    // Always close the dedicated pool
+    await dedicatedPool.close();
+    logger.info('Dedicated Moneris BULK INSERT connection closed');
+  }
+}
+
+/**
  * Bulk insert Mastercard response CSV from blob storage using SQL Server BULK INSERT
  * This is MUCH faster than row-by-row inserts - can handle millions of records in minutes
  *
