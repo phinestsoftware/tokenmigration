@@ -17,9 +17,10 @@ This guide explains how to manually test the Token Migration system through Azur
 ### Azure Portal Access
 You need access to the following Azure resources:
 - **Resource Group:** `rg-tokenmigration-dev`
-- **Storage Account:** `sttokenmigoqt29j`
-- **SQL Database:** `sqldb-tokenmigration-dev` on server `sql-tokenmigration-dev-oqt29j`
-- **Application Insights:** `appi-tokenmigration-dev`
+- **Storage Account:** `sttokenmig941olb`
+- **Function App:** `func-tokenmigration-dev-941olb`
+- **SQL Database:** `sqldb-tokenmigration-dev` on server `sql-tokenmigration-dev-941olb`
+- **Application Insights:** `appi-tokenmigration-dev-941olb-941olb`
 
 ### Required Roles
 - **Storage Blob Data Contributor** - to upload files
@@ -132,7 +133,7 @@ Your test data must follow these rules or tokens will be marked INVALID:
 ### Step 1: Navigate to Storage Account
 
 1. Go to [Azure Portal](https://portal.azure.com)
-2. Search for `sttokenmigoqt29j` in the search bar
+2. Search for `sttokenmig941olb` in the search bar
 3. Click on the Storage Account
 
 ### Step 2: Open Storage Browser
@@ -174,7 +175,7 @@ After upload, you should see:
 ### Option 1: Application Insights (Recommended)
 
 1. Go to Azure Portal
-2. Search for `appi-tokenmigration-dev`
+2. Search for `appi-tokenmigration-dev-941olb`
 3. Click **Logs** in the left menu
 4. Run this query to see recent activity:
 
@@ -189,7 +190,7 @@ traces
 
 ### Option 2: Function App Logs
 
-1. Search for `func-tokenmigration-dev-oqt29j`
+1. Search for `func-tokenmigration-dev-941olb`
 2. Click **Log stream** in the left menu
 3. Watch for real-time logs
 
@@ -223,7 +224,7 @@ After uploading a file, you should see these messages in order:
 ### Database Tables to Check
 
 Connect to the SQL database using these credentials:
-- **Server:** `sql-tokenmigration-dev-oqt29j.database.windows.net`
+- **Server:** `sql-tokenmigration-dev-941olb.database.windows.net`
 - **Database:** `sqldb-tokenmigration-dev`
 - **Username:** `sqladmin`
 - **Password:** (ask your admin)
@@ -378,7 +379,7 @@ After successful migration, output files are generated:
 
 ### Navigate to Output Container
 
-1. Go to Storage Account `sttokenmigoqt29j`
+1. Go to Storage Account `sttokenmig941olb`
 2. Open **Storage browser** > **Blob containers**
 3. Click **billing-output**
 
@@ -492,6 +493,100 @@ MONERIS_TOKEN,EXP_DATE,ENTITY_ID,ENTITY_TYPE,ENTITY_STS,CREATION_DATE,LAST_USE_D
 ---
 
 
+## Mock Mastercard Response Configuration
+
+The dev environment uses a mock Mastercard service that automatically generates PG tokens for testing. In production, you need to disable this so the system waits for real Mastercard response files.
+
+### Configuration Setting
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `MOCK_MASTERCARD_ENABLED` | When `true`, generates fake PG tokens. When `false`, waits for real MC response | `false` |
+
+### Option 1: Azure CLI
+
+**Disable Mock (Production Mode):**
+```bash
+az functionapp config appsettings set \
+  --name func-tokenmigration-dev-941olb \
+  --resource-group rg-tokenmigration-dev \
+  --settings "MOCK_MASTERCARD_ENABLED=false"
+```
+
+**Enable Mock (Dev/Testing Mode):**
+```bash
+az functionapp config appsettings set \
+  --name func-tokenmigration-dev-941olb \
+  --resource-group rg-tokenmigration-dev \
+  --settings "MOCK_MASTERCARD_ENABLED=true"
+```
+
+**Verify Current Setting:**
+```bash
+az functionapp config appsettings list \
+  --name func-tokenmigration-dev-941olb \
+  --resource-group rg-tokenmigration-dev \
+  --query "[?name=='MOCK_MASTERCARD_ENABLED'].value" -o tsv
+```
+
+### Option 2: Azure Portal UI
+
+1. Go to [Azure Portal](https://portal.azure.com)
+2. Search for `func-tokenmigration-dev-941olb` (or your Function App name)
+3. In the left menu, click **Settings** → **Environment variables**
+4. Find `MOCK_MASTERCARD_ENABLED` in the list
+5. Click on the setting to edit it
+6. Change the value:
+   - `true` = Mock enabled (generates fake PG tokens)
+   - `false` = Mock disabled (waits for real MC response)
+7. Click **Apply**
+8. Click **Apply** again at the bottom to confirm
+9. Wait for the Function App to restart (usually 10-30 seconds)
+
+### How It Works
+
+**When MOCK_MASTERCARD_ENABLED = true:**
+1. `fileGen` function generates MC input file
+2. Mock service automatically creates `.mc.response` file with fake PG tokens
+3. `.mc.response` file is uploaded to `mastercard-mapping` container
+4. `uploadFileMastercard` processes the mock response
+5. Migration continues with fake PG tokens
+
+**When MOCK_MASTERCARD_ENABLED = false:**
+1. `fileGen` function generates MC input file
+2. MC input file is uploaded to `mastercard-output` container
+3. System waits for external Mastercard response
+4. When real `.mc.response` file arrives in `mastercard-mapping` container
+5. `uploadFileMastercard` processes the real response
+6. Migration continues with real PG tokens
+
+### Verifying the Change
+
+After changing the setting, restart the Function App:
+
+**CLI:**
+```bash
+az functionapp restart \
+  --name func-tokenmigration-dev-941olb \
+  --resource-group rg-tokenmigration-dev
+```
+
+**Portal:**
+1. Go to Function App overview
+2. Click **Restart** at the top
+
+Then check the logs after uploading a test file:
+
+**If mock is enabled:**
+- You'll see: `Mock MC response file uploaded`
+- Processing continues automatically
+
+**If mock is disabled:**
+- You'll see: `MC input file generated`
+- Processing waits until `.mc.response` file is manually uploaded
+
+---
+
 ## Quick Reference Card
 
 ### Upload Path
@@ -518,6 +613,6 @@ GROUP BY VALIDATION_STATUS, MIGRATION_STATUS;
 
 ### Key URLs
 - Azure Portal: https://portal.azure.com
-- Storage Account: `sttokenmigoqt29j`
-- Function App: `func-tokenmigration-dev-oqt29j`
-- App Insights: `appi-tokenmigration-dev`
+- Storage Account: `sttokenmig941olb`
+- Function App: `func-tokenmigration-dev-941olb`
+- App Insights: `appi-tokenmigration-dev-941olb`
