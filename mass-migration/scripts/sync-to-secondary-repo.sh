@@ -66,6 +66,9 @@ EXCLUDED FILES:
     - scripts/sync-to-secondary-repo.sh (this script)
     - scripts/query-db.js               (internal database query tool)
     - scripts/benchmark.js              (internal benchmark tool)
+    - scripts/query-logs.js             (internal logs query tool)
+    - scripts/verify-migration.js       (internal migration verification tool)
+    - scripts/verify-benchmark.js       (internal benchmark verification tool)
 
 WORKFLOW:
     Normal workflow (main -> secondary):
@@ -118,6 +121,9 @@ EXCLUDES=(
     "scripts/sync-to-secondary-repo.sh"
     "scripts/query-db.js"
     "scripts/benchmark.js"
+    "scripts/query-logs.js"
+    "scripts/verify-migration.js"
+    "scripts/verify-benchmark.js"
 )
 
 # Colors for output
