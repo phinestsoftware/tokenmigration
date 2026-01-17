@@ -94,8 +94,9 @@ function generateMockResponse(token: TokenForMock): MockMcResponse {
   // Simulate ~95% success rate with random failures
   const isSuccess = Math.random() < 0.95;
 
-  // Generate mock PG token (16 digits starting with 9)
-  const pgToken = generateMockPgToken();
+  // Generate unique PG token based on Moneris token (ensures 1:1 mapping)
+  // Simply replace first digit with '97' to create unique PG token
+  const pgToken = isSuccess ? `97${token.MONERIS_TOKEN.slice(2)}` : '';
 
   // Generate mock card details
   const cardDetails = generateMockCardDetails();
@@ -147,15 +148,6 @@ function generateMockResponse(token: TokenForMock): MockMcResponse {
       'sourceOfFunds.provided.card.scheme': '',
     };
   }
-}
-
-/**
- * Generate mock PG token
- */
-function generateMockPgToken(): string {
-  const timestamp = Date.now().toString().slice(-12);
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  return `9${timestamp}${random}`;
 }
 
 /**

@@ -598,5 +598,199 @@ BEGIN
 END
 GO
 
+-- =====================================================
+-- SP_PROCESS_BATCH - High-performance batch processing
+-- Processes entire batch in SQL without round-trips
+-- =====================================================
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SP_PROCESS_BATCH]') AND type in (N'P'))
+    DROP PROCEDURE [dbo].[SP_PROCESS_BATCH]
+GO
+
+CREATE PROCEDURE [dbo].[SP_PROCESS_BATCH]
+    @BatchId VARCHAR(50),
+    @FileId VARCHAR(50),
+    @SuccessCount INT OUTPUT,
+    @FailureCount INT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @Now DATETIME2 = GETUTCDATE();
+    DECLARE @ErrorCount INT = 0;
+
+    -- Create temp table to hold joined data with computed PMR
+    CREATE TABLE #BatchTokens (
+        MonerisId BIGINT NOT NULL,
+        MONERIS_TOKEN VARCHAR(32) NOT NULL,
+        EXP_DATE VARCHAR(10) NULL,
+        ENTITY_ID VARCHAR(50) NULL,
+        ENTITY_TYPE VARCHAR(4) NULL,
+        LAST_USE_DATE DATE NULL,
+        PG_TOKEN VARCHAR(32) NULL,
+        PMR VARCHAR(16) NULL,
+        FIRST_SIX VARCHAR(6) NULL,
+        LAST_FOUR VARCHAR(4) NULL,
+        FUNDING_METHOD VARCHAR(20) NULL,
+        CC_CARD_BRAND VARCHAR(20) NULL,
+        CC_EXP_DATE VARCHAR(20) NULL,
+        PAYMENT_METHOD_TYPE VARCHAR(20) NULL,
+        SOURCEOFFUNDS_NUMBER VARCHAR(20) NULL,
+        MONERIS2PG_MIGRATION_STATUS VARCHAR(20) NULL,
+        PM_TYPE_ID INT NULL,
+        ENTITY_REF_ID INT NULL,
+        IsSuccess BIT NOT NULL DEFAULT 0,
+        PRIMARY KEY (MonerisId)
+    );
+
+    -- Step 1: Join Moneris and PG tokens, compute PMR and derived fields
+    INSERT INTO #BatchTokens (
+        MonerisId, MONERIS_TOKEN, EXP_DATE, ENTITY_ID, ENTITY_TYPE, LAST_USE_DATE,
+        PG_TOKEN, PMR, FIRST_SIX, LAST_FOUR, FUNDING_METHOD, CC_CARD_BRAND,
+        CC_EXP_DATE, PAYMENT_METHOD_TYPE, SOURCEOFFUNDS_NUMBER, MONERIS2PG_MIGRATION_STATUS,
+        PM_TYPE_ID, ENTITY_REF_ID, IsSuccess
+    )
+    SELECT
+        m.ID,
+        m.MONERIS_TOKEN,
+        m.EXP_DATE,
+        m.ENTITY_ID,
+        m.ENTITY_TYPE,
+        m.LAST_USE_DATE,
+        p.PG_TOKEN,
+        -- Generate PMR: replace first digit with 8
+        CASE WHEN p.PG_TOKEN IS NOT NULL THEN '8' + SUBSTRING(p.PG_TOKEN, 2, 15) ELSE NULL END,
+        -- FIRST_SIX: prefer from PG, fallback to SOURCEOFFUNDS_NUMBER
+        COALESCE(p.FIRST_SIX, LEFT(p.SOURCEOFFUNDS_NUMBER, 6)),
+        -- LAST_FOUR: prefer from PG, fallback to SOURCEOFFUNDS_NUMBER
+        COALESCE(p.LAST_FOUR, RIGHT(p.SOURCEOFFUNDS_NUMBER, 4)),
+        p.FUNDING_METHOD,
+        p.CC_CARD_BRAND,
+        p.CC_EXP_DATE,
+        p.PAYMENT_METHOD_TYPE,
+        p.SOURCEOFFUNDS_NUMBER,
+        p.MONERIS2PG_MIGRATION_STATUS,
+        -- PM_TYPE_ID: decode PAYMENT_METHOD_TYPE
+        CASE UPPER(p.PAYMENT_METHOD_TYPE)
+            WHEN 'CREDIT' THEN 1
+            WHEN 'DEBIT' THEN 2
+            WHEN 'PREPAID' THEN 3
+            ELSE 1
+        END,
+        -- ENTITY_REF_ID: decode ENTITY_TYPE (1=ACCOUNTNUM, 2=GUID)
+        CASE m.ENTITY_TYPE
+            WHEN '1' THEN 1
+            WHEN '2' THEN 2
+            WHEN '3' THEN 3
+            WHEN '4' THEN 4
+            ELSE 1
+        END,
+        -- IsSuccess: has valid PG token with SUCCESS status
+        CASE WHEN p.PG_TOKEN IS NOT NULL AND p.MONERIS2PG_MIGRATION_STATUS = 'SUCCESS' THEN 1 ELSE 0 END
+    FROM MONERIS_TOKENS_STAGING m
+    LEFT JOIN PG_TOKENS_STAGING p ON m.MONERIS_TOKEN = p.MONERIS_TOKEN
+    WHERE m.BATCH_ID = @BatchId;
+
+    -- Get counts
+    SELECT @SuccessCount = SUM(CASE WHEN IsSuccess = 1 THEN 1 ELSE 0 END),
+           @FailureCount = SUM(CASE WHEN IsSuccess = 0 THEN 1 ELSE 0 END)
+    FROM #BatchTokens;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Step 2: Insert PAYMENT_METHOD
+        INSERT INTO PAYMENT_METHOD (PMR, PM_TYPE_ID, PM_STATUS, PAR, PM_CREATION_DATE, PM_LAST_UPDATED, PM_LAST_USE_DATE, PM_CREATION_CHANNEL, PM_UPDATED_CHANNEL, INITIAL_TXN_ID)
+        SELECT t.PMR, t.PM_TYPE_ID, 'A', NULL, @Now, @Now, t.LAST_USE_DATE, 'MIGRATION', 'MIGRATION', NULL
+        FROM #BatchTokens t WHERE t.IsSuccess = 1 AND t.PMR IS NOT NULL;
+
+        -- Step 3: Insert TOKENIZED_CARD
+        INSERT INTO TOKENIZED_CARD (CC_TOKEN, PMR, CC_EXP_DATE, CC_CARD_BRAND, FIRST_SIX, LAST_FOUR, ISSUER_NAME, CARD_LEVEL)
+        SELECT t.PG_TOKEN, t.PMR, t.CC_EXP_DATE, t.CC_CARD_BRAND, t.FIRST_SIX, t.LAST_FOUR, NULL, NULL
+        FROM #BatchTokens t WHERE t.IsSuccess = 1 AND t.PG_TOKEN IS NOT NULL;
+
+        -- Step 4: Insert ENTITY_DETAILS (use NOT EXISTS for entities that may already exist from other batches)
+        INSERT INTO ENTITY_DETAILS (ENTITY_ID, ENTITY_REF_ID, ENTITY_VALUE, APPLICATION_INDICATOR, SYSTEM_INDICATOR, ENTITY_CREATION_DATE, ENTITY_LAST_UPDATED)
+        SELECT DISTINCT t.ENTITY_ID, t.ENTITY_REF_ID, t.ENTITY_ID, 'BILLING', 'MONERIS', @Now, @Now
+        FROM #BatchTokens t
+        WHERE t.IsSuccess = 1 AND t.ENTITY_ID IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM ENTITY_DETAILS WHERE ENTITY_ID = t.ENTITY_ID);
+
+        -- Step 5: Insert ENTITY_PMR_MAPPING
+        INSERT INTO ENTITY_PMR_MAPPING (ENTITY_ID, PMR, PM_USAGE_TYPE, PM_IS_PREF, ENTITY_STATUS, ENTITY_CREATION_DATE, ENTITY_LAST_UPDATED)
+        SELECT t.ENTITY_ID, t.PMR, NULL, 'N', 'A', @Now, @Now
+        FROM #BatchTokens t WHERE t.IsSuccess = 1 AND t.ENTITY_ID IS NOT NULL AND t.PMR IS NOT NULL;
+
+        -- Step 6: Insert PMR_MONERIS_MAPPING
+        INSERT INTO PMR_MONERIS_MAPPING (PMR, MONERIS_TOKEN, PG_TOKEN, CREATION_DATE)
+        SELECT t.PMR, t.MONERIS_TOKEN, t.PG_TOKEN, @Now
+        FROM #BatchTokens t WHERE t.IsSuccess = 1 AND t.PMR IS NOT NULL;
+
+        -- Step 7: Update MONERIS_TOKENS_STAGING with success data
+        UPDATE m
+        SET
+            MIGRATION_STATUS = 'COMPLETED',
+            PMR = t.PMR,
+            CC_TOKEN = t.PG_TOKEN,
+            CC_EXP_DATE = t.CC_EXP_DATE,
+            CC_CARD_BRAND = t.CC_CARD_BRAND,
+            FIRST_SIX = t.FIRST_SIX,
+            LAST_FOUR = t.LAST_FOUR,
+            PM_TYPE_ID = CAST(t.PM_TYPE_ID AS VARCHAR(50)),
+            PM_STATUS = 'A',
+            PM_IS_PREF = 'N',
+            UPDATED_AT = @Now
+        FROM MONERIS_TOKENS_STAGING m
+        INNER JOIN #BatchTokens t ON m.ID = t.MonerisId
+        WHERE t.IsSuccess = 1;
+
+        -- Step 8: Update MONERIS_TOKENS_STAGING with failure data
+        UPDATE m
+        SET
+            MIGRATION_STATUS = 'FAILED',
+            ERROR_CODE = 'NO_PG_TOKEN',
+            UPDATED_AT = @Now
+        FROM MONERIS_TOKENS_STAGING m
+        INNER JOIN #BatchTokens t ON m.ID = t.MonerisId
+        WHERE t.IsSuccess = 0;
+
+        -- Step 9: Insert error details for failures
+        INSERT INTO MIGRATION_ERROR_DETAILS (
+            FILE_ID, BATCH_ID, MONERIS_TOKEN, ENTITY_ID,
+            ERROR_CODE, ERROR_MESSAGE, ERROR_TYPE
+        )
+        SELECT
+            @FileId,
+            @BatchId,
+            t.MONERIS_TOKEN,
+            t.ENTITY_ID,
+            'NO_PG_TOKEN',
+            CASE
+                WHEN t.MONERIS2PG_MIGRATION_STATUS IS NOT NULL
+                THEN 'MC response: ' + t.MONERIS2PG_MIGRATION_STATUS
+                ELSE 'No MC response found'
+            END,
+            'MIGRATION'
+        FROM #BatchTokens t
+        WHERE t.IsSuccess = 0;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        -- Re-throw the error
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+        DECLARE @ErrorState INT = ERROR_STATE();
+        RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+    END CATCH
+
+    -- Cleanup
+    DROP TABLE #BatchTokens;
+END
+GO
+
 PRINT 'Schema creation completed successfully.'
 GO

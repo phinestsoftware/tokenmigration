@@ -74,6 +74,59 @@ export async function executeProcedure<T>(
   return request.execute<T>(procedureName);
 }
 
+/**
+ * Execute a stored procedure with output parameters
+ * Returns an object with the output parameter values
+ */
+export interface OutputParamConfig {
+  type: 'int' | 'varchar' | 'bigint';
+  direction: 'output';
+  length?: number; // for varchar
+}
+
+export async function executeProcedureWithOutput<T extends Record<string, unknown>>(
+  procedureName: string,
+  inputParams: Record<string, unknown>,
+  outputParams: Record<keyof T, OutputParamConfig>
+): Promise<T> {
+  const connection = await getConnection();
+  const request = connection.request();
+
+  // Add input parameters
+  Object.entries(inputParams).forEach(([key, value]) => {
+    request.input(key, value);
+  });
+
+  // Add output parameters
+  Object.entries(outputParams).forEach(([key, config]) => {
+    const paramConfig = config as OutputParamConfig;
+
+    switch (paramConfig.type) {
+      case 'int':
+        request.output(key, sql.Int);
+        break;
+      case 'bigint':
+        request.output(key, sql.BigInt);
+        break;
+      case 'varchar':
+        request.output(key, sql.VarChar(paramConfig.length ?? 255));
+        break;
+      default:
+        request.output(key, sql.VarChar(255));
+    }
+  });
+
+  const result = await request.execute(procedureName);
+
+  // Extract output parameter values
+  const outputValues: Record<string, unknown> = {};
+  Object.keys(outputParams).forEach((key) => {
+    outputValues[key] = result.output[key];
+  });
+
+  return outputValues as T;
+}
+
 // Bulk insert helper
 export async function bulkInsert<T extends Record<string, unknown>>(
   tableName: string,
