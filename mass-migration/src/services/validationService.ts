@@ -27,6 +27,7 @@ export const ValidationErrors = {
   DUPLICATE_IN_PHUB: 'E008',
   INVALID_ENTITY_TYPE: 'E009',
   INVALID_ENTITY_STATUS: 'E010',
+  INVALID_USAGE_TYPE: 'E011',
 } as const;
 
 /**
@@ -190,6 +191,26 @@ export function validateEntityStatus(entityStatus: string | null | undefined): V
 }
 
 /**
+ * Validate usage type (must be 1, 2, 3, or 4)
+ */
+export function validateUsageType(usageType: string | null | undefined): ValidationResult {
+  if (!usageType) {
+    return { isValid: true, status: ValidationStatus.VALID }; // Optional
+  }
+
+  if (!['1', '2', '3', '4'].includes(usageType)) {
+    return {
+      isValid: false,
+      status: ValidationStatus.INVALID,
+      errorCode: ValidationErrors.INVALID_USAGE_TYPE,
+      errorMessage: 'Usage type must be 1, 2, 3, or 4',
+    };
+  }
+
+  return { isValid: true, status: ValidationStatus.VALID };
+}
+
+/**
  * Validate a complete Moneris token record
  */
 export function validateMonerisTokenRecord(record: MonerisTokenRecord): ValidationResult {
@@ -215,6 +236,12 @@ export function validateMonerisTokenRecord(record: MonerisTokenRecord): Validati
   const entityStatusResult = validateEntityStatus(record.entitySts);
   if (!entityStatusResult.isValid) {
     return entityStatusResult;
+  }
+
+  // Validate usage type
+  const usageTypeResult = validateUsageType(record.usageType);
+  if (!usageTypeResult.isValid) {
+    return usageTypeResult;
   }
 
   return { isValid: true, status: ValidationStatus.VALID };

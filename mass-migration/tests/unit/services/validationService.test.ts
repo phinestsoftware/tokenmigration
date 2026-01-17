@@ -3,6 +3,7 @@ import {
   validateExpiryDate,
   validateEntityType,
   validateEntityStatus,
+  validateUsageType,
   validateMonerisTokenRecord,
   validateTokenBatch,
   isFailureThresholdExceeded,
@@ -151,6 +152,56 @@ describe('ValidationService', () => {
     });
   });
 
+  describe('validateUsageType', () => {
+    it('should validate usage type 1', () => {
+      const result = validateUsageType('1');
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should validate usage type 2', () => {
+      const result = validateUsageType('2');
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should validate usage type 3', () => {
+      const result = validateUsageType('3');
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should validate usage type 4', () => {
+      const result = validateUsageType('4');
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should accept null usage type (optional)', () => {
+      const result = validateUsageType(null);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should accept undefined usage type (optional)', () => {
+      const result = validateUsageType(undefined);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should reject usage type 0', () => {
+      const result = validateUsageType('0');
+      expect(result.isValid).toBe(false);
+      expect(result.errorCode).toBe(ValidationErrors.INVALID_USAGE_TYPE);
+    });
+
+    it('should reject usage type 5', () => {
+      const result = validateUsageType('5');
+      expect(result.isValid).toBe(false);
+      expect(result.errorCode).toBe(ValidationErrors.INVALID_USAGE_TYPE);
+    });
+
+    it('should reject non-numeric usage type', () => {
+      const result = validateUsageType('A');
+      expect(result.isValid).toBe(false);
+      expect(result.errorCode).toBe(ValidationErrors.INVALID_USAGE_TYPE);
+    });
+  });
+
   describe('validateMonerisTokenRecord', () => {
     const validRecord: MonerisTokenRecord = {
       monerisToken: '9518050018246830',
@@ -191,6 +242,19 @@ describe('ValidationService', () => {
       const record = { ...validRecord, entitySts: 'X' };
       const result = validateMonerisTokenRecord(record);
       expect(result.isValid).toBe(false);
+    });
+
+    it('should fail on invalid usage type', () => {
+      const record = { ...validRecord, usageType: '5' };
+      const result = validateMonerisTokenRecord(record);
+      expect(result.isValid).toBe(false);
+      expect(result.errorCode).toBe(ValidationErrors.INVALID_USAGE_TYPE);
+    });
+
+    it('should pass with valid usage type', () => {
+      const record = { ...validRecord, usageType: '2' };
+      const result = validateMonerisTokenRecord(record);
+      expect(result.isValid).toBe(true);
     });
   });
 

@@ -17,6 +17,7 @@ import {
   validateExpiryDate,
   validateEntityType,
   validateEntityStatus,
+  validateUsageType,
   isFailureThresholdExceeded,
   ValidationErrors,
 } from '../services/validationService.js';
@@ -30,6 +31,7 @@ interface TokenRecord {
   ENTITY_ID: string | null;
   ENTITY_TYPE: string | null;
   ENTITY_STS: string | null;
+  USAGE_TYPE: string | null;
 }
 
 /**
@@ -89,7 +91,7 @@ async function validateMonerisTokens(
 ): Promise<void> {
   // Get all tokens for this file
   const result = await executeQuery<TokenRecord>(
-    `SELECT ID, MONERIS_TOKEN, EXP_DATE, ENTITY_ID, ENTITY_TYPE, ENTITY_STS
+    `SELECT ID, MONERIS_TOKEN, EXP_DATE, ENTITY_ID, ENTITY_TYPE, ENTITY_STS, USAGE_TYPE
      FROM MONERIS_TOKENS_STAGING
      WHERE FILE_ID = @fileId AND VALIDATION_STATUS = 'PENDING'`,
     { fileId }
@@ -165,7 +167,16 @@ async function validateMonerisTokens(
               errorMessage = entityStatusValidation.errorMessage ?? 'Invalid entity status';
               invalidCount++;
             } else {
-              validCount++;
+              // Validate usage type
+              const usageTypeValidation = validateUsageType(token.USAGE_TYPE);
+              if (!usageTypeValidation.isValid) {
+                status = 'INVALID';
+                errorCode = usageTypeValidation.errorCode ?? null;
+                errorMessage = usageTypeValidation.errorMessage ?? 'Invalid usage type';
+                invalidCount++;
+              } else {
+                validCount++;
+              }
             }
           }
         }
